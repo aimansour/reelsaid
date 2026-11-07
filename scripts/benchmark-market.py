@@ -113,6 +113,9 @@ def main():
                           "reidwiseman", "astro_kjell", "astro_jessica"],
             "includeLatestPosts": False, "includeReels": True,
         }, 0.15),
+        ("sian", "mixed-corrected", {"bulkUrls": [{"url": url} for url in mixed]}, 0.20),
+        ("steady", "personal", {"handles": ["astro_kjell"], "maxReelsPerHandle": 2}, 0.15),
+        ("steady", "spanish", {"handles": ["bbcmundo"], "maxReelsPerHandle": 3}, 0.15),
     ]
     for actor, label, payload, cap in cases:
         benchmark(ACTORS[actor], payload, cap,
