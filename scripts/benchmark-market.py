@@ -106,6 +106,13 @@ def main():
         ("profiles", "fixture-types", {"usernames": ["yashinrush9", "lyssamariexo",
                                                      "nasa", "levainbakery", "humansofny"],
                                          "includeLatestPosts": True, "includeReels": True}, 0.15),
+        ("profiles", "consumer-candidates", {
+            "usernames": ["astrophysicsmania", "national.archaeology", "echoesofunboundcuriosity",
+                          "thekindcookie.ph", "cookiegentle", "petitebakerystudio",
+                          "_kaicealea", "slimreshae", "somedaysbakery",
+                          "reidwiseman", "astro_kjell", "astro_jessica"],
+            "includeLatestPosts": False, "includeReels": True,
+        }, 0.15),
     ]
     for actor, label, payload, cap in cases:
         benchmark(ACTORS[actor], payload, cap,
