@@ -15,6 +15,8 @@ ACTORS = {
     "steady": "steadyfetch~instagram-reel-transcript-scraper",
     "apple": "apple_yang~instagram-transcripts-scraper",
     "sian": "sian.agency~instagram-ai-transcript-extractor",
+    "apify": "apify~instagram-reel-scraper",
+    "profiles": "deepmine~instagram-profile-scraper",
 }
 TERMINAL = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"}
 
@@ -98,6 +100,12 @@ def main():
         ("sian", "mixed", {"bulkUrls": mixed}, 0.20),
         ("steady", "profile", {"handles": [fixtures["profile"]],
                                "maxReelsPerHandle": fixtures["profileLimit"]}, 0.30),
+        ("apify", "single", {"username": [reel], "includeTranscript": True}, 0.15),
+        ("apify", "profile", {"username": [fixtures["profile"]],
+                               "resultsLimit": fixtures["profileLimit"], "includeTranscript": True}, 0.30),
+        ("profiles", "fixture-types", {"usernames": ["yashinrush9", "lyssamariexo",
+                                                     "nasa", "levainbakery", "humansofny"],
+                                         "includeLatestPosts": True, "includeReels": True}, 0.15),
     ]
     for actor, label, payload, cap in cases:
         benchmark(ACTORS[actor], payload, cap,
