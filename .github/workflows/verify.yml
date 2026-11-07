@@ -1,0 +1,60 @@
+name: Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact revision approved for verification
+        required: true
+        type: string
+      check:
+        description: Verification to run
+        required: true
+        type: choice
+        options: [pass, fail]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: >-
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run verification
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          CHECK_MODE: ${{ inputs.check }}
+          SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
+          SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: bash
+        run: |
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          umask 077
+          if ! (
+            [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ && -n "$SOURCE_KEY" && -n "$APIFY_TOKEN" ]] || exit 1
+            [[ "$SOURCE_REPOSITORY" =~ ^git@github\.com:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$ ]] || exit 1
+            printf '%s\n' "$SOURCE_KEY" > "$scratch/key"
+            printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$scratch/known_hosts"
+            export GIT_SSH_COMMAND="ssh -i '$scratch/key' -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile='$scratch/known_hosts' -o HostKeyAlgorithms=ssh-ed25519"
+            git -C "$scratch" init -q || exit 1
+            git -C "$scratch" fetch --quiet --depth=1 --no-tags "$SOURCE_REPOSITORY" refs/heads/main || exit 1
+            test "$(git -C "$scratch" rev-parse FETCH_HEAD)" = "$SOURCE_REVISION" || exit 1
+            git -C "$scratch" checkout --quiet --detach "$SOURCE_REVISION" || exit 1
+            rm -f -- "$scratch/key"
+          ) >/dev/null 2>&1; then
+            printf '%s\n' 'Approved source revision unavailable.'
+            exit 1
+          fi
+          unset SOURCE_KEY SOURCE_REPOSITORY
+          bash .github/scripts/verify.sh "$scratch" "$CHECK_MODE"
