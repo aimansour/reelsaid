@@ -42,6 +42,8 @@ def read_record(path):
 
 
 def usable(row):
+    if row.get("status") in {"error", "failed", "private_or_removed"} or row.get("errMsg"):
+        return False
     for key in ("text", "transcript", "fullText", "fullTranscript", "transcription"):
         val = row.get(key)
         if isinstance(val, str) and val.strip():

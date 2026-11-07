@@ -1,0 +1,68 @@
+{
+  "shortSpoken": {
+    "url": "https://www.instagram.com/reel/DS46KJNjva9/",
+    "mediaDurationSeconds": 8.891837,
+    "language": "en",
+    "referenceSource": "Visible captions checked across the downloaded public clip at two frames per second.",
+    "referenceText": "One of my favorite quotes from Zig Ziglar is, you don't have to be great to start, but you have to start to be great."
+  },
+  "singleBenchmark": {
+    "url": "https://www.instagram.com/reel/DX7lzTOJ1p6/",
+    "language": "en",
+    "expected": "spoken transcript with timed segments",
+    "evidence": "Steadyfetch, APISmith, and SIÁN all delivered transcripts."
+  },
+  "profiles": {
+    "personal": {
+      "handle": "astro_kjell",
+      "observedReel": "https://www.instagram.com/reel/CsuFa_Mga41/",
+      "evidence": "Public profile comparison reported personal, isPrivate false, isProfessionalAccount false, and one listed reel."
+    },
+    "creator": {
+      "handle": "lyssamariexo",
+      "evidence": "Public profile comparison reported creator and listed reels."
+    },
+    "business": {
+      "handle": "nasa",
+      "evidence": "Public profile comparison reported business and listed reels."
+    }
+  },
+  "collaboration": {
+    "discoveredOn": "nasa",
+    "publisher": "nasajohnson",
+    "coauthors": [
+      "iss",
+      "nasa"
+    ],
+    "url": "https://www.instagram.com/reel/DfaaAP7BvIu/"
+  },
+  "carousel": {
+    "url": "https://www.instagram.com/p/Ddm6E9OGt5D/",
+    "observedVideoPositionsZeroBased": [
+      2,
+      6,
+      10
+    ]
+  },
+  "mediaCases": {
+    "signedMedia": "Resolve the short spoken fixture and keep its signed CDN URL intact.",
+    "expiredMedia": "Keep an issued signed link in restricted storage and verify the expiration response before using it in a cloud recovery test.",
+    "separateAudio": "For deterministic coverage, split the verified short fixture into a video-only track and its original audio. Assert both refer to the same source timeline.",
+    "silence": "Generate a zero-signal PCM fixture with one valid audio track.",
+    "instrumentalOnly": "Generate a music-only fixture with chords and no voice.",
+    "speechOverMusic": "Mix a reference speech clip with a known instrumental bed and retain the original reference text."
+  },
+  "trialReel": {
+    "status": "unverified",
+    "reason": "Community reports include candidates but do not establish current trial status."
+  },
+  "multilingual": {
+    "url": "https://www.instagram.com/reel/Dfax6SllBLR/",
+    "language": "es",
+    "evidence": "Steadyfetch returned a usable Spanish transcript in the measured profile run."
+  },
+  "realNoSpeechCandidate": {
+    "url": "https://www.instagram.com/reel/DfaaAP7BvIu/",
+    "evidence": "Steadyfetch returned no_speech. Classify its actual audio in Task 04."
+  }
+}
