@@ -1,0 +1,97 @@
+# ReelSaid product design
+
+Internal design for the private source repository.
+
+## Product and launch goals
+
+| Surface | Name |
+| --- | --- |
+| Brand | ReelSaid |
+| Apify Store title | ReelSaid — Instagram Reels Transcript API |
+| Public GitHub repository | `reelsaid` |
+| Tagline | Every Reel, in Words. |
+
+ReelSaid turns public Instagram videos into original-language transcripts, timed segments, and subtitles through one Apify Actor. Developers, automation users, and AI agents can run it on a single Reel, batch, or creator profile. They can use the same result contract for one-off requests and scheduled monitoring. Write the public interface and documentation in clear international English, with English as a primary reference language for testing and multilingual transcription as part of the product.
+
+At launch, target the speed, transcript quality, and metadata coverage of leading Store alternatives, with Steadyfetch as the primary reference. Reduce Apify run costs while preserving quality and reliability, and verify a positive contribution margin before finalizing prices. The first run should be easy to understand, and repeated runs should give users predictable results and charges. [Steadyfetch Store listing](https://apify.com/steadyfetch/instagram-reel-transcript-scraper)
+
+## Design approaches
+
+Use one Actor with an in-house Instagram extraction path, a media and transcription path, and an account-scoped result lifecycle. This matches the requested single input surface and keeps acquisition, quality decisions, and billing together. Native Apify APIs, MCP, tasks, schedules, datasets, and file storage expose the service to callers. Instagram extraction runs over HTTP in the Actor, with no Instagram login, browser, paid Apify proxy, or dependency on another Actor for extraction. Consuming a previous Actor's dataset remains an input option. [Apify Actor overview](https://docs.apify.com/actors)
+
+The public GitHub repository owns CI and on-demand release orchestration. The private repository holds the source and internal engineering material. Apify builds Docker from private source using its layer cache. A trusted public workflow can stage a private revision and upload a release bundle through the CLI, or trigger a build of a private Git source already linked to Apify. An upload gives the workflow control over the exact contents sent to Apify. A private Git build keeps the deployment source transfer between Apify and GitHub. The selected approach is public orchestration with a private build input. Choose the delivery mechanism in implementation based on exact revision control, cache behavior, and what is visible on each public surface. [Apify deployment](https://docs.apify.com/actors/development/deployment) · [Apify builds and caching](https://docs.apify.com/actors/development/builds-and-runs/builds)
+
+Each carousel video is a separate transcript and billing unit, as agreed. A single charge for the parent post would require combining the durations and billing outcomes of distinct videos. Per-video billing lets the caller match the ledger to the usable results and see exactly which carousel videos were free.
+
+## Input and discovery
+
+- Accept a single Reel URL, a list of URLs, an account handle or profile URL, an explicit shortcode, and a direct Instagram CDN video or audio URL. Accept `/reel/`, `/p/`, `/tv/`, and other supported public Instagram URL variants. Accept `datasetId` and inline `datasetItems` from prior runs, including rows with separate `videoUrl` and `audioUrl` and an originating post URL. Inputs can be mixed and are validated independently. Validate media destinations and redirects before fetching or forwarding them. Dataset access follows the calling account's permissions.
+- Enumerate public Reels from personal, creator, and business profiles. Support batches and paginated discovery through the full accessible profile history. Process all videos in a carousel, preserving child order and identity. Keep the profile used for discovery separate from the original publisher, including collaboration and other posts displayed on a profile that another account published. Preserve parent post metadata and identify which fields belong to a carousel child. Include Trial Reels when public discovery can be demonstrated on a real fixture. If a fixture is unavailable, Trial Reel coverage can follow separately.
+- Expose discovery filters for publication date from/to, the last number of days, minimum views and likes, duration bounds, and skipping pinned Reels. Offer newest-first and most-viewed order, with deterministic ties. Apply discovery filters before transcription and report skips. For a filter that needs unavailable metadata, report the missing value and filter outcome explicitly. Confirm filter and returned metric coverage against the leading alternatives.
+- Normalize equivalent post URLs, remove tracking parameters from post identity, and resolve shared identities across link, shortcode, profile, CDN, and dataset inputs. Preserve the signed CDN URL for fetching. Deduplicate at video identity so different children of a carousel remain distinct. Preserve which inputs led to the same video and account for duplicate inputs in the summary. Use stable media evidence for CDN-only inputs where available. Preserve uncertainty when a standalone CDN URL cannot be attributed to a post.
+- `language` defaults to `auto`. Accept supported language codes as transcription hints and keep the spoken language in the output. Expose word timing and subtitle outputs through the same input contract. Keep data fields and options consistent across Console, the API, MCP, and workflow templates.
+- Put a real, short, publicly accessible, spoken Reel in the Console `prefill` and make it clear how to run or replace the example. Use it to produce a genuine transcript in the Store's default-input test and provide a representative sample output. An empty API object, unknown source field, or invalid URL produces a clear input error or item failure without discovery, transcription, or billing for that invalid input. Valid siblings still run. The sample URL is supplied only when explicitly present in the submitted input, including when the Console or Store test submits the prefill. [Apify input schema](https://docs.apify.com/actors/development/actor-definition/input-schema/specification/v1) · [Apify Store testing](https://docs.apify.com/actors/publishing/test)
+
+## Media and transcript quality
+
+Use a primary and an independent fallback Instagram retrieval path, selected on evidence from Apify cloud runs. Candidate sources include public response data, embedding pages, and the profile Reels tab. Keep each source behind a stable media and metadata contract so it can change independently. Recover an expired CDN URL from its original public post when known. Prefer a usable separate audio track if the video has none. Return an explicit expiry or audio error if recovery is unavailable.
+
+Use `whisper-large-v3-turbo` and `whisper-large-v3` through GroqCloud. Take the URL-based path when the media can be fetched directly and the result meets quality needs. Use upload and targeted media preparation where the URL path fails or stronger inspection is needed. Account for each independent Groq organization and model's measured quota, including request and audio-time limits. Learn from provider responses, honor cooldowns, and queue work as capacity changes across concurrent runs. Configure the credentials as runtime secrets. The split between models and the exact capacity policy are implementation decisions. [Groq speech-to-text](https://console.groq.com/docs/speech-to-text) · [Groq rate limits](https://console.groq.com/docs/rate-limits)
+
+Use reliable original-language captions when they satisfy the output and quality contract. Otherwise transcribe the audio. Track the origin with `transcriptSource`, using `captions` or `asr`. Treat silence, absent audio, and music without intelligible speech as distinct outcomes. Transcribe speech over background music. Provide a confidence score from 0 to 1 for the speech classification, including music-only, grounded in validation on representative audio. Report an unavailable confidence as `null`.
+
+Validate speech coverage and timestamp alignment against the media. Check early cutoffs, missing first words, missing endings, fabricated speech during silence or music, and accidental sentence repetition. Repair recoverable defects with targeted retries. Measure the affected share of the clip on its timeline so overlapping defects count once. Validate the estimated share against reference transcripts. After repair, results with more than 20% of the clip affected are free, and usable results with less than 20% affected can be billed. When the evidence is insufficient to qualify a suspect result, retain any usable text as an uncharged partial. The design proposes treating exactly 20% as uncharged and measuring the share over the video timeline, or audio timeline for an audio-only input. An absent or unusable transcript is free even in a video with a short spoken passage.
+
+## Results and run outcomes
+
+Return a versioned, stable JSON dataset contract. Each distinct video gets a row, with a separate result shape for inputs that cannot be resolved to a video. Include a canonical identity and input provenance. Publish stable status and error enums, types, and null behavior in the output schema. A result row includes the following groups.
+
+| Group | Contract |
+| --- | --- |
+| Transcript | `transcript`, sentence-level `segments` with text and start/end seconds, `language`, `durationSeconds`, `wordCount`, `transcriptSource`, and `wordLevelTimestamps` when requested and available. Preserve original-language text and report the timing granularity actually delivered. |
+| First three seconds | `hook` with the words spoken within the opening three seconds and their timing when available. Derive it from the media timeline and report no hook when that interval has no speech. |
+| Subtitle files | SRT and WebVTT derived from the validated segments, with file references usable through Apify's output and storage interfaces. |
+| Metadata | A separate `metadata` object with canonical Reel or post URL, shortcode, publisher and discovery profile, original caption, publication time, duration, cover, audio or music metadata, view or play count, likes, comments, carousel position, and further relevant public fields supported by the sources. Preserve the source meaning of each metric and use `null` for unavailable metadata. |
+| Quality and failure | `status`, `errorCode`, `retryable`, speech classification and confidence, and for partial results the missing start, missing end, or internal gaps and their cause. |
+| Billing | `charged`, `billedMinutes`, and `chargedEvents` reconcile to confirmed Apify charges. Distinguish an unresolved charge from a confirmed zero, and identify results returned from the cache. |
+
+Distinguish success, partial, skipped, failed, and deferred work. Cover invalid input, inaccessible/private or removed content, no audio, silence, music-only, expired media, temporary blocks or throttles, an exceeded duration limit, failed transcription, and exhausted time or budget. Give profiles and datasets an actionable outcome when discovery yields no videos or fails. Distinguish private and removed content when the response supplies enough evidence. Store completed results incrementally so one failed or deferred item leaves the rest available.
+
+Publish a run summary separately from the video rows and link it in the output schema. Include submitted, discovered, unique, duplicate, successful, partial, failed, skipped, deferred, cached, and billed counts, aggregated failure and stop reasons, confirmed charge totals, and a continuation reference when work remains. Define the denominators so the counts can be reconciled in mixed-source and carousel runs.
+
+## Scheduling, caching, and recovery
+
+- Support native Apify Tasks and Schedules. `watchlistId` names a watchlist within the caller's account. `newReelsOnly` returns eligible videos newly published relative to that watchlist. The proposed behavior establishes a baseline per profile on first use or when a profile is added. Changed filters apply to new discoveries. Processing older or previously filtered videos is an explicit backfill. Retain retryable discoveries and advance state without dropping videos after a partial scan or overlapping schedules.
+- Cache validated successful transcripts within the caller's account, keyed by the video and transcript options that change the result. Reusing a cached result does not bill the caller again. `forceRefresh` requests new processing. Overlapping refreshes for the same work converge on a single refresh and its corresponding billing decision.
+- Give each video a single active processing owner across runs. A waiting run can reuse an eligible result in its account, acquire the work after the owner releases it, or defer it with a continuation. Recover after a timed-out owner without allowing the stale worker to commit a result or charge. Keep watchlist, transcript, and billing data scoped to the authenticated account.
+- Resume pending and retryable items from `resumeFromDatasetId` or a persisted run checkpoint. Preserve the original work identity, outcomes, and filter context. Keep already completed and paid outputs accessible by reference without emitting or billing them again as new results. Save progress before time or spend limits halt a run.
+
+## Pricing and accounting
+
+Use Apify Pay Per Event with platform usage included in the run price. Charge one base event for an eligible video, covering its first three minutes. After that, charge one event per additional started minute. Each eligible carousel child gets its own duration, quality decision, and ledger entry. [Apify Pay Per Event](https://docs.apify.com/actors/monetize/pay-per-event)
+
+| Apify tier | Proposed base price per eligible video |
+| --- | ---: |
+| FREE | $0.012 |
+| BRONZE | $0.011 |
+| SILVER | $0.010 |
+| GOLD | $0.009 |
+| PLATINUM / DIAMOND | $0.0085 |
+
+The proposed price for an additional started minute is $0.003 at every tier. These are launch candidates. Final prices follow measured quality, speed, cost, and margin. Run startup, discovery, duplicate inputs, cache hits, failures, absent speech, and results that fail the quality rule carry zero events. The ledger counts charge events only after Apify confirms them. `billedMinutes` reflects the started minutes covered by the confirmed events, including any covered by the base event.
+
+Durably stage each billable result before charging, track which events were accepted, and reconcile a lost response or crash without issuing the same charge twice. Use stable idempotency for charge retries and account-level coordination for cross-run deduplication, including cache, refresh, and resume. Check the user's charge cap against the full expected charge and checkpoint work that exceeds available budget. If part of the charge is confirmed and a remaining event cannot be collected, the proposed policy is to deliver the complete staged result with the confirmed amount and keep it recoverable. Reconcile any in-flight event without collecting an unpaid balance on a later run. [Apify charge API](https://docs.apify.com/api/v2/post-charge-run)
+
+Use actual developer payout and measure Apify compute, network, storage, build overhead, Groq usage, and the cost of retries and free outcomes. Report margin by paid tier and across representative usage mixes that include the external cost of serving users on the Apify FREE plan. Use those figures to make the final pricing and margin decisions. [Apify pricing and costs](https://docs.apify.com/actors/monetize/pricing-and-costs)
+
+## Private delivery and public packaging
+
+Run all automated checks and release workflows from the public GitHub repository. Keep source, private fixtures, internal design, keys, and detailed diagnostics on trusted surfaces. Public workflow summaries and caller-visible Actor logs expose sanitized status and actionable messages. Keep private sources and source-bearing Docker layers out of public logs, artifacts, and caches. Store Apify, Groq, and GitHub credentials as secrets within their respective trusted scopes, and keep untrusted public contribution jobs separate from privileged jobs. Verify the published Actor serves the public interface with source visibility disabled. Use Apify CLI for supported operations and the Apify API for release fields and operations the CLI does not cover. Support selecting a verified revision and publishing on demand. [GitHub Actions cache security](https://docs.github.com/en/actions/concepts/workflows-and-actions/dependency-caching#cache-security) · [Apify publication](https://docs.apify.com/actors/publishing/publish)
+
+Deliver the ReelSaid logo with visual review at the size it will appear in the Store. Use the agreed brand, title, and tagline consistently. The Store and GitHub packaging include a clear English README, search-oriented but natural product copy and field descriptions, valid schemas, examples, sample output, documented filters and charging behavior, and discoverable repository metadata. Design these surfaces for discovery through Google, Apify Store, GitHub, and AI agents. Write the native MCP description and input fields so an agent can identify the intended task, provide the right input, and interpret results. Include runnable API examples and importable n8n, Make, and Zapier templates using native Apify interfaces. Name Whisper Large-v3 publicly and identify it as part of the largest Whisper model tier. Keep model routing, extraction methods, infrastructure, cost experiments, and other implementation details internal.
+
+## Evidence for release and decisions left to implementation
+
+Require representative verification of acquisition and transcription from Apify's cloud environment, including a public personal profile, carousel videos, separate audio, expired URLs, mixed batches, and retry and resume behavior. Verify Store default-input reliability and ease of use, SRT and VTT accuracy, native integrations, public discoverability, and actual charging outcomes including music, silence, quality repair, simultaneous runs, and spend caps. Compare ReelSaid with Steadyfetch and other relevant leaders on comparable real inputs, using transcript quality, metadata coverage, first-result latency, batch throughput, completion rate, and per-result cost. Read upstream documentation, relevant GitHub and Reddit discussions, and reported failure cases to inform what is worth measuring.
+
+The implementation plan orders research and experiments before dependent choices. Use measurements to choose the language, libraries, primary and fallback retrieval paths, media preparation, model and quota strategy, durable state and lease mechanisms, runtime settings, concurrency, memory and CPU allocation, and operational bounds. Compare large-batch concurrency and resource allocation where the tradeoff is uncertain. Resolve final pricing, quality calibration, and deployment details from the evidence gathered through those tasks. The spec establishes the behavior and launch outcomes while leaving those choices open.
