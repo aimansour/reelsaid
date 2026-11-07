@@ -8,7 +8,7 @@ case "$1" in
         npm exec --yes --package=apify-cli@1.11.0 -- apify actors ls --my --limit 1 --json
         ;;
     run)
-        npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-market.py
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-retrieval.sh
         ;;
     fail)
         exit 1
