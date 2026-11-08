@@ -1,6 +1,8 @@
 """Check the production discovery code with logged-out cloud traffic."""
 
 import asyncio
+import re
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from apify import Actor
@@ -10,6 +12,7 @@ from reelsaid.contracts import RunContext
 from reelsaid.discovery import discover
 from reelsaid.input import parse_input
 from reelsaid.instagram import InstagramClient
+from reelsaid.media import MediaClient, inspect_media
 
 
 SHORT = "DS46KJNjva9"
@@ -31,7 +34,7 @@ async def main():
             "shortcodes": [SHORT, CAROUSEL, COLLAB],
             "profiles": ["astro_kjell"],
         })
-        context = RunContext(instagram, Actor.apify_client, datetime.now(UTC), lambda: False)
+        context = RunContext(instagram, Actor.apify_client, datetime.now(UTC), lambda: False, MediaClient(session))
         result = await discover(plan, context)
         assert not result.input_outcomes, [item.error_code for item in result.input_outcomes]
         assert result.duplicates == 1
@@ -54,6 +57,32 @@ async def main():
                 RunContext(InstagramClient(html_session), Actor.apify_client, datetime.now(UTC), lambda: False),
             )
         assert [video.video_id for video in html.videos] == [video.video_id for video in expected]
+        short = next(video for video in result.videos if video.metadata.shortcode == SHORT)
+        assert short.video_url and "oe=" in short.video_url
+        expired = replace(
+            short,
+            video_url=re.sub(r"([?&]oe=)[^&]+", r"\g<1>1", short.video_url),
+            alternate_video_urls=(),
+        )
+        standalone = await inspect_media(
+            replace(expired, metadata=replace(expired.metadata, shortcode=None)), context,
+        )
+        assert standalone.error_code == "MEDIA_URL_EXPIRED", standalone.error_code
+        recovered = await inspect_media(expired, context)
+        assert recovered.status == "success", recovered.error_code
+        media = recovered.value
+        assert media.video_id == short.video_id and media.audio and media.audio.has_audio
+        try:
+            assert 8 < media.duration_seconds < 10
+            evidence = {
+                "durationSeconds": float(media.duration_seconds),
+                "mediaBytes": media.audio.source_bytes,
+                "rangeOnly": media.audio.file is None,
+                "expiredWithoutOrigin": standalone.error_code,
+                "recoveredExpiredUrl": True,
+            }
+        finally:
+            media.close()
         await Actor.push_data({
             "primaryVideos": len(result.videos),
             "personalFixture": True,
@@ -62,6 +91,7 @@ async def main():
             "firstPage": len(first.entries),
             "secondPage": len(second.entries),
             "htmlFallback": True,
+            **evidence,
         })
 
 

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from apify_client import ApifyClientAsync
 
     from .instagram import InstagramClient
+    from .media import MediaClient
 
 
 JsonObject = dict[str, object]
@@ -103,6 +104,12 @@ class VideoMetadata:
 
 
 @dataclass(frozen=True)
+class CaptionCandidate:
+    url: str
+    language: str | None = None
+
+
+@dataclass(frozen=True)
 class VideoRef:
     video_id: str
     metadata: VideoMetadata
@@ -110,6 +117,7 @@ class VideoRef:
     video_url: str | None = None
     audio_url: str | None = None
     alternate_video_urls: tuple[str, ...] = ()
+    caption_candidates: tuple[CaptionCandidate, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -118,3 +126,4 @@ class RunContext:
     apify: ApifyClientAsync
     now: datetime
     expired: Callable[[], bool]
+    media_client: MediaClient | None = None

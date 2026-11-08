@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 from apify_client.errors import ApifyApiError, ApifyClientError
 
-from .contracts import FilterOptions, InputPlan, InputRef, JsonObject, Outcome, RunContext, VideoMetadata, VideoRef
+from .contracts import CaptionCandidate, FilterOptions, InputPlan, InputRef, JsonObject, Outcome, RunContext, VideoMetadata, VideoRef
 from .input import classify_url
 from .instagram import BASE, CODE, InstagramError, object_value, post_shortcode, records
 
@@ -99,7 +99,7 @@ def _canonical(parent: JsonObject, shortcode: str) -> str:
     return f"{BASE}/{route}/{shortcode}/"
 
 
-def _videos_from_post(
+def videos_from_post(
     node: JsonObject, code: str, ref: InputRef, *, profile: str | None = None,
     listing: JsonObject | None = None, profile_id: str | None = None,
 ) -> list[VideoRef]:
@@ -163,6 +163,7 @@ def _merge(first: VideoRef, second: VideoRef) -> VideoRef:
         provenance=tuple(dict.fromkeys((*first.provenance, *second.provenance))),
         video_url=first.video_url or second.video_url,
         audio_url=first.audio_url or second.audio_url,
+        caption_candidates=tuple(dict.fromkeys((*first.caption_candidates, *second.caption_candidates))),
         metadata=replace(
             left,
             discovery_profiles=tuple(dict.fromkeys((*left.discovery_profiles, *right.discovery_profiles))),
@@ -285,7 +286,7 @@ class _DiscoveryRun:
         result = self.posts[code]
         if isinstance(result, InstagramError):
             raise result
-        videos = _videos_from_post(result, code, ref, profile=profile, listing=listing, profile_id=profile_id)
+        videos = videos_from_post(result, code, ref, profile=profile, listing=listing, profile_id=profile_id)
         if not videos:
             raise InstagramError("NO_VIDEO")
         return videos
@@ -310,6 +311,11 @@ class _DiscoveryRun:
         post_url = None
         video_url = _cdn(item.get("videoUrl") or item.get("video_url") or item.get("webVideoUrl"))
         audio_url = _cdn(item.get("audioUrl") or item.get("audio_url"))
+        captions = tuple(
+            CaptionCandidate(url, _text(track.get("language")))
+            for track in records(item.get("captionTracks"))
+            if (url := _cdn(track.get("url")))
+        )
         for key in ("postUrl", "reelUrl", "canonicalUrl", "url", "inputUrl"):
             url = classify_url(item.get(key) or meta.get(key))
             if url and url[0] == "post":
@@ -347,7 +353,8 @@ class _DiscoveryRun:
                     matched = matching_assets[0]
             for video in videos:
                 if video == matched:
-                    self.add(replace(video, video_url=video.video_url or video_url, audio_url=video.audio_url or audio_url),
+                    self.add(replace(video, video_url=video.video_url or video_url,
+                                     audio_url=video.audio_url or audio_url, caption_candidates=captions),
                              *(url for url in (video_url, audio_url) if url))
                 else:
                     self.add(video)
@@ -361,7 +368,7 @@ class _DiscoveryRun:
             identity = self.assets.get(asset) or f"cdn:{sha256(asset.encode()).hexdigest()}"
             existing = self.videos.get(identity)
             metadata = existing.metadata if existing else VideoMetadata(post_url=post_url, shortcode=code)
-            self.add(VideoRef(identity, metadata, (ref,), video_url, audio_url))
+            self.add(VideoRef(identity, metadata, (ref,), video_url, audio_url, caption_candidates=captions))
         elif post_error:
             self.error(ref, post_error.code, post_error.retryable)
         else:
