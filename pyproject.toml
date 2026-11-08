@@ -3,8 +3,11 @@ name = "reelsaid"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "ai-edge-litert==2.3.0",
     "apify==4.2.1",
     "curl-cffi==0.17.0",
+    "numpy==2.5.4",
+    "onnxruntime==1.31.1",
 ]
 
 [dependency-groups]

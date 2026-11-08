@@ -240,6 +240,15 @@ class MediaClient:
         path, _, _ = await self._download(asset.url, now or datetime.now(UTC))
         return path
 
+    async def read_text(self, url: str, now: datetime) -> str:
+        data = bytearray()
+        async with self._open(url, now) as (response, _):
+            async for chunk in response.aiter_content():
+                data.extend(chunk)
+                if len(data) > 1024 * 1024:
+                    raise MediaError("CAPTIONS_TOO_LARGE")
+        return data.decode("utf-8-sig")
+
 
 async def _refresh(ref: VideoRef, context: RunContext) -> VideoRef:
     if not ref.metadata.shortcode:

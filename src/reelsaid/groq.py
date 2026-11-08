@@ -324,7 +324,9 @@ def _draft(payload: JsonObject, hint: str | None) -> TranscriptDraft | None:
 
 
 @asynccontextmanager
-async def _prepare_upload(media: MediaPlan, context: RunContext):
+async def prepare_upload(
+    media: MediaPlan, context: RunContext, *, start: float | None = None, duration: float | None = None,
+):
     source = media.audio
     if source is None:
         raise MediaError("NO_AUDIO")
@@ -337,10 +339,11 @@ async def _prepare_upload(media: MediaPlan, context: RunContext):
                 path = await MediaClient(session).materialize(source)
         with NamedTemporaryFile(suffix=".flac", delete=False) as output:
             upload = Path(output.name)
+        trim = ["-ss", str(start), "-t", str(duration)] if start is not None and duration is not None else []
         process = await asyncio.create_subprocess_exec(
             "ffmpeg", "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file",
             "-format_whitelist", LOCAL_MEDIA_FORMATS, "-i", str(path),
-            "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "flac", str(upload),
+            *trim, "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "flac", str(upload),
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
         )
         try:
@@ -364,7 +367,7 @@ async def _prepare_upload(media: MediaPlan, context: RunContext):
 
 
 class GroqAdapter:
-    def __init__(self, transport: GroqTransport, pool: GroqPool, *, upload=_prepare_upload, sleep=asyncio.sleep,
+    def __init__(self, transport: GroqTransport, pool: GroqPool, *, upload=prepare_upload, sleep=asyncio.sleep,
                  max_wait_seconds: float = 10):
         self.transport = transport
         self.pool = pool

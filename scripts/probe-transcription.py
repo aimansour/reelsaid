@@ -13,9 +13,10 @@ with tempfile.TemporaryDirectory(prefix="reelsaid-asr-probe-") as directory:
     target = Path(directory) / "actor"
     shutil.copytree("probes/transcription", target)
     shutil.copyfile("probes/instagram/probe.py", target / "instagram.py")
+    shutil.copyfile("scripts/install-quality-models", target / "install-quality-models")
     package = target / "reelsaid"
     package.mkdir()
-    for module in ("contracts", "input", "instagram", "discovery", "media", "groq"):
+    for module in ("contracts", "input", "instagram", "discovery", "media", "groq", "audio_quality", "quality"):
         shutil.copyfile(Path("src/reelsaid") / f"{module}.py", package / f"{module}.py")
     subprocess.run(["apify", "actors", "push", "--dir", str(target), "--no-apply-env-vars-to-build",
                     "--wait-for-finish", "420", "--json"], check=True)

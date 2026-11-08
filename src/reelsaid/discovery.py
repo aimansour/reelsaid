@@ -312,7 +312,7 @@ class _DiscoveryRun:
         video_url = _cdn(item.get("videoUrl") or item.get("video_url") or item.get("webVideoUrl"))
         audio_url = _cdn(item.get("audioUrl") or item.get("audio_url"))
         captions = tuple(
-            CaptionCandidate(url, _text(track.get("language")))
+            CaptionCandidate(url, _text(track.get("language")), track.get("isOriginal") is True)
             for track in records(item.get("captionTracks"))
             if (url := _cdn(track.get("url")))
         )

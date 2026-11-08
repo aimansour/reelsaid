@@ -102,6 +102,12 @@ def main():
 
         asyncio.run(adapter_main())
         return
+    if mode == "quality":
+        import asyncio
+        from quality_probe import main as quality_main
+
+        asyncio.run(quality_main())
+        return
     keys = json.loads(os.environ["REELSAID_GROQ_KEYS"])
     session = requests.Session(impersonate="chrome", trust_env=False)
     root = session.get(BASE + "/", timeout=8)

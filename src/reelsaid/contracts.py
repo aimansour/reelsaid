@@ -108,6 +108,7 @@ class VideoMetadata:
 class CaptionCandidate:
     url: str
     language: str | None = None
+    is_original: bool = False
 
 
 @dataclass(frozen=True)
