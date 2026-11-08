@@ -219,3 +219,12 @@ def test_cdn_alias_and_failed_post_hydration_keep_single_outcomes():
     assert result.videos[0].video_url == cdn(EXAMPLE)
     assert any(v.metadata.post_url == "https://www.instagram.com/reel/blocked/" for v in result.videos)
     assert not result.input_outcomes
+
+
+def test_empty_pinned_ids_are_known_unpinned_without_profile_id():
+    ig = FakeInstagram({"B": post("B")}, {
+        ("nasa", None): ProfilePage("owner", (), ("relay", "second")),
+        ("nasa", ("relay", "second")): ProfilePage(None, ({"code": "B", "clips_tab_pinned_user_ids": []},)),
+    })
+    result = resolve({"profiles": ["nasa"], "skipPinned": True}, ig)
+    assert len(result.videos) == 1 and result.videos[0].metadata.pinned is False

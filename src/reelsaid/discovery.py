@@ -21,6 +21,7 @@ class DiscoveryCursor:
     profile_cursor: tuple[str, str] | None = None
     dataset_offset: int = 0
     profile_offset: int = 0
+    profile_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,7 +109,12 @@ def _videos_from_post(
     owner = object_value(node.get("user") or node.get("owner"))
     parent_image = _variant(object_value(node.get("image_versions2")).get("candidates"))
     pinned_users = listing.get("clips_tab_pinned_user_ids")
-    pinned = (profile_id in {str(user) for user in pinned_users}) if profile_id and isinstance(pinned_users, list) else None
+    pinned = None
+    if isinstance(pinned_users, list):
+        if not pinned_users:
+            pinned = False
+        elif profile_id:
+            pinned = profile_id in {str(user) for user in pinned_users}
 
     def count(field: str) -> int | None:
         value = _count(node.get(field))
@@ -394,12 +400,13 @@ class _DiscoveryRun:
                 return None
 
     async def profile(
-        self, name: str, ref: InputRef, cursor: tuple[str, str] | None, offset: int,
-    ) -> tuple[tuple[str, str] | None, int] | None:
+        self, name: str, ref: InputRef, position: DiscoveryCursor,
+    ) -> DiscoveryCursor | None:
+        cursor, offset, profile_id = position.profile_cursor, position.profile_offset, position.profile_id
         seen_cursors = set()
         while True:
             if self.context.expired():
-                return cursor, offset
+                return replace(position, profile_cursor=cursor, profile_offset=offset, profile_id=profile_id)
             if cursor in seen_cursors:
                 self.error(ref, "PROFILE_PAGINATION_UNAVAILABLE", True)
                 return None
@@ -409,14 +416,15 @@ class _DiscoveryRun:
             except InstagramError as error:
                 self.error(ref, error.code, error.retryable)
                 return None
+            profile_id = page.profile_id or profile_id
             if not page.entries and cursor is None and not page.cursor:
                 self.error(ref, "EMPTY_PROFILE")
             for entry in page.entries[offset:]:
                 if self.context.expired():
-                    return cursor, offset
+                    return replace(position, profile_cursor=cursor, profile_offset=offset, profile_id=profile_id)
                 entry_ref = replace(ref, item_index=offset) if cursor is None else ref
                 code = entry["code"]
-                await self.add_post(code, entry_ref, profile=name, listing=entry, profile_id=page.profile_id)
+                await self.add_post(code, entry_ref, profile=name, listing=entry, profile_id=profile_id)
                 offset += 1
             if not page.cursor:
                 return None
@@ -438,9 +446,8 @@ async def discover(
             break
         ref, value = source.ref, source.value
         if source.kind == "profile":
-            pending = await run.profile(value, ref, position.profile_cursor, position.profile_offset)
-            if pending is not None:
-                cursor = DiscoveryCursor(index, profile_cursor=pending[0], profile_offset=pending[1])
+            cursor = await run.profile(value, ref, position)
+            if cursor is not None:
                 break
         elif source.kind == "dataset":
             pending = await run.dataset(value, ref, position.dataset_offset)

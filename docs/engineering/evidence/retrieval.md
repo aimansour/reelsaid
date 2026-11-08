@@ -21,3 +21,9 @@ A fresh local guest session on the public Reels tab served the list in embedded 
 The application should preserve the requested discovery profile separately from the publisher carried by the post data. Merge profile metrics and post metadata by exact shortcode or child identity. Keep a signed media URL as received. Preserve unavailable metadata as null, including when a visible play count exists and the source has no separate view count.
 
 The private probe demonstrates Python with curl_cffi as one viable candidate. Runtime and media selection follow the next task's evidence. No Trial Reel fixture with confirmed current status was found. [yt-dlp Instagram extractor](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/instagram.py) · [Instaloader profile implementation](https://github.com/instaloader/instaloader/blob/master/instaloader/structures.py) · [Gallery-dl report](https://github.com/mikf/gallery-dl/issues/9564)
+
+## Production discovery smoke test
+
+Public workflow run `42440900751` invoked private Apify run `RCIrgJDVdjEcIhEGo` with the production discovery code. The run succeeded in 7.76 seconds at 512 MB. It returned six unique videos from the matched inputs, merged the duplicate short Reel, expanded all three Carousel videos, and resolved the verified Personal account. The NASA Reels tab returned 12 entries on each of two disjoint pages. With the post GraphQL path disabled, the HTML route recovered the same three Carousel video identities.
+
+The captured continuation page omitted the profile's numeric ID but supplied empty pinned-user lists. An empty list establishes that a video is unpinned. Discovery carries the numeric ID from the first page through the continuation so it can also interpret nonempty lists. Dataset input grants read access through the Actor schema's resource picker, and the app uses the current run's scoped client. [Apify Actor permissions](https://docs.apify.com/actors/development/permissions)
