@@ -79,6 +79,7 @@ class AnswerState:
     answered: bool = False
     first_seen_at: datetime | None = None
     is_new: bool = False
+    first_seen_run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -264,7 +265,7 @@ class State:
         async with self._guards[lease.slot]:
             if not await self._renew_active(lease):
                 return False
-            key = _key("staged", lease.video_id)
+            key = _key("staged", _result_key(lease.video_id, options))
             record = {
                 "resultKey": _result_key(lease.video_id, options), "runId": self.run_id,
                 "claimId": lease.claim_id, "payload": payload,
@@ -275,10 +276,10 @@ class State:
             self._staged.add(lease.claim_id)
             return True
 
-    async def load_stage(self, lease: Lease) -> JsonObject | None:
+    async def load_stage(self, lease: Lease, options: TranscriptOptions = TranscriptOptions()) -> JsonObject | None:
         if not self._owns(lease):
             return None
-        return await self._get(_key("staged", lease.video_id))
+        return await self._get(_key("staged", _result_key(lease.video_id, options)))
 
     async def load_settlement(self, lease: Lease, claim_id: str) -> JsonObject | None:
         if not self._owns(lease):
@@ -293,13 +294,21 @@ class State:
                 raise StateUnavailable("Billing ownership was lost")
             await self._set(_key("settlement", lease.video_id, claim_id), record)
 
-    async def commit(self, lease: Lease, options: TranscriptOptions, status: Status, payload: JsonObject) -> bool:
-        if not self._owns(lease) or lease.claim_id not in self._staged or status not in {"success", "partial", "skipped"}:
+    async def commit(
+        self, lease: Lease, options: TranscriptOptions, status: Status, payload: JsonObject, *, recovered_claim: str | None = None,
+    ) -> bool:
+        if not self._owns(lease) or status not in {"success", "partial", "skipped"}:
             return False
         async with self._guards[lease.slot]:
             if not await self._renew_active(lease):
                 return False
-            result = asdict(CachedResult(lease.claim_id, status, payload))
+            if recovered_claim is not None:
+                staged = await self.load_stage(lease, options)
+                if not staged or staged["claimId"] != recovered_claim:
+                    return False
+            elif lease.claim_id not in self._staged:
+                return False
+            result = asdict(CachedResult(recovered_claim or lease.claim_id, status, payload))
             record = {"latest": result}
             if status != "success":
                 previous = await self.lookup(self.tenant_id, lease.video_id, options)
@@ -313,21 +322,22 @@ class State:
         record = await self._get(_key("answer", video_id))
         if not record:
             return AnswerState()
-        return AnswerState(True, datetime.fromisoformat(record["firstSeenAt"]))
+        return AnswerState(True, datetime.fromisoformat(record["firstSeenAt"]), first_seen_run_id=record["firstSeenRunId"])
 
     async def record_answer(
         self, tenant_id: str, watchlist_id: str | None, video_id: str, outcome: Outcome[object],
+        *, seen_at: datetime | None = None,
     ) -> AnswerState:
         current = await self.lookup_answer(tenant_id, watchlist_id, video_id)
         if current.answered or outcome.retryable or (
             outcome.status != "success" and (outcome.status != "skipped" or outcome.error_code not in DEFINITIVE_FREE)
         ):
             return current
-        seen = datetime.now(UTC)
+        seen = seen_at or datetime.now(UTC)
         await self._set(_key("answer", video_id), {
             "firstSeenAt": seen.isoformat(), "firstSeenRunId": self.run_id, "watchlistId": watchlist_id,
         })
-        return AnswerState(True, seen, True)
+        return AnswerState(True, seen, True, self.run_id)
 
     async def save_checkpoint(self, tenant_id: str, dataset_id: str, checkpoint: Checkpoint) -> None:
         self._check_tenant(tenant_id)

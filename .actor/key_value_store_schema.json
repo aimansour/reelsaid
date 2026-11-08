@@ -15,7 +15,7 @@
                     "schemaVersion", "submitted", "discovered", "unique", "duplicate", "successful", "partial",
                     "failed", "skipped", "deferred", "inputErrors", "cached", "billed", "unresolvedCharges",
                     "billedMinutes", "confirmedChargeUsd", "chargedEvents", "reasonCounts", "watchlistId",
-                    "newAnswers", "previouslyAnswered", "stopReason", "continuation"
+                    "newAnswers", "previouslyAnswered", "stopReason", "continuation", "completedDatasetIds"
                 ],
                 "properties": {
                     "schemaVersion": { "const": 1 },
@@ -40,6 +40,12 @@
                     "newAnswers": { "$ref": "#/definitions/count" },
                     "previouslyAnswered": { "$ref": "#/definitions/count" },
                     "stopReason": { "type": ["string", "null"] },
+                    "completedDatasetIds": {
+                        "type": "array",
+                        "description": "Earlier datasets with completed results preserved by this continuation.",
+                        "uniqueItems": true,
+                        "items": { "type": "string" }
+                    },
                     "continuation": {
                         "type": ["object", "null"],
                         "required": ["resumeFromDatasetId", "remaining", "reason"],

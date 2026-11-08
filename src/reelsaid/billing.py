@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from apify_client.errors import ApifyClientError
 
+from .contracts import TranscriptOptions
 from .state import Lease, State
 
 
@@ -209,16 +210,20 @@ class ApifyCharges:
 
 
 class Settlement:
-    def __init__(self, state: State, provider: ChargeProvider | None, budget: RunBudget, *, clock=time.time):
+    def __init__(
+        self, state: State, provider: ChargeProvider | None, budget: RunBudget, *,
+        options: TranscriptOptions = TranscriptOptions(), clock=time.time,
+    ):
         self._state = state
         self._provider = provider
         self._budget = budget
+        self._options = options
         self._clock = clock
 
     async def settle(self, lease: Lease, reservation: Reservation) -> ChargeReceipt:
         async with self._budget.settlement_lock:
             self._budget.require(reservation)
-            staged = await self._state.load_stage(lease)
+            staged = await self._state.load_stage(lease, self._options)
             if not staged or staged["claimId"] != lease.claim_id or staged["runId"] != lease.run_id:
                 raise BillingError("A durable result must exist before settlement")
             if self._budget.blocked:
@@ -242,7 +247,7 @@ class Settlement:
 
     async def recover(self, lease: Lease) -> ChargeReceipt | None:
         async with self._budget.settlement_lock:
-            staged = await self._state.load_stage(lease)
+            staged = await self._state.load_stage(lease, self._options)
             if not staged:
                 return None
             claim_id = staged["claimId"]

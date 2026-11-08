@@ -92,6 +92,7 @@ class RunSummary:
     previously_answered: int
     stop_reason: str | None
     continuation: Continuation | None
+    completed_dataset_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> JsonObject:
         return {
@@ -118,6 +119,7 @@ class RunSummary:
             "previouslyAnswered": self.previously_answered,
             "stopReason": self.stop_reason,
             "continuation": self.continuation.to_dict() if self.continuation else None,
+            "completedDatasetIds": list(self.completed_dataset_ids),
         }
 
 
@@ -367,6 +369,7 @@ def summarize(
     rows: list[DatasetRow], *, submitted: int, unique: int, duplicates: int,
     watchlist_id: str | None = None, previously_answered: int = 0, stop_reason: str | None = None,
     continuation: Continuation | None = None,
+    completed_dataset_ids: tuple[str, ...] = (),
 ) -> RunSummary:
     videos = [row for row in rows if row["kind"] == "video"]
     statuses = Counter(row["status"] for row in videos)
@@ -386,4 +389,5 @@ def summarize(
         charged_events=dict(events), reason_counts=dict(Counter(row["errorCode"] for row in rows if row["errorCode"])),
         watchlist_id=watchlist_id, new_answers=sum(row["isNew"] is True for row in videos),
         previously_answered=previously_answered, stop_reason=stop_reason, continuation=continuation,
+        completed_dataset_ids=completed_dataset_ids,
     )

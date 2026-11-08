@@ -268,6 +268,7 @@ async def _refresh(ref: VideoRef, context: RunContext) -> VideoRef:
         raise MediaError("MEDIA_IDENTITY_CHANGED")
     return replace(
         ref,
+        video_id=matched.video_id if ref.video_id.startswith("cdn:") else ref.video_id,
         video_url=matched.video_url,
         alternate_video_urls=matched.alternate_video_urls,
         audio_url=matched.audio_url or ref.audio_url,
