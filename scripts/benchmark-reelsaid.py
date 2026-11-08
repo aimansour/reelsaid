@@ -37,6 +37,8 @@ def main():
         ("matched-512", {"startUrls": profile_urls}, 512, 130),
         ("batch-512", {"startUrls": larger}, 512, 150),
         ("batch-256", {"startUrls": larger}, 256, 150),
+        ("batch-1024", {"startUrls": larger}, 1024, 150),
+        ("languages-512", {"profiles": ["bbcarabic"], "maxResults": 2}, 512, 65),
     ]
     for label, payload, memory, timeout in cases:
         benchmark(actor, {**payload, **common}, 0.30, f"{path}/reelsaid-{campaign}-{label}",
