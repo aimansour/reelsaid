@@ -54,7 +54,7 @@ jobs:
             printf '%s\n' 'Approved revisions required.'
             exit 1
           fi
-          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" >/dev/null 2>&1; then
+          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" approved >/dev/null 2>&1; then
             printf '%s\n' 'Approved source revision unavailable.'
             exit 1
           fi
