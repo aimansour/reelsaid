@@ -1,0 +1,7 @@
+{
+    "actorSpecification": 1,
+    "name": "reelsaid-billing-probe",
+    "version": "0.1",
+    "buildTag": "latest",
+    "dockerfile": "../Dockerfile"
+}

@@ -1,0 +1,28 @@
+{
+    "pricingInfos": [{
+        "pricingModel": "PAY_PER_EVENT",
+        "isPPEPlatformUsagePaidByUser": false,
+        "pricingPerEvent": {
+            "actorChargeEvents": {
+                "reel-transcript": {
+                    "eventTitle": "Verified transcript",
+                    "eventDescription": "Private billing verification event.",
+                    "isPrimaryEvent": true,
+                    "eventTieredPricingUsd": {
+                        "FREE": {"tieredEventPriceUsd": 0.012},
+                        "BRONZE": {"tieredEventPriceUsd": 0.011},
+                        "SILVER": {"tieredEventPriceUsd": 0.01},
+                        "GOLD": {"tieredEventPriceUsd": 0.009},
+                        "PLATINUM": {"tieredEventPriceUsd": 0.0085},
+                        "DIAMOND": {"tieredEventPriceUsd": 0.0085}
+                    }
+                },
+                "additional-minute": {
+                    "eventTitle": "Additional minute",
+                    "eventDescription": "Private billing verification event.",
+                    "eventPriceUsd": 0.003
+                }
+            }
+        }
+    }]
+}

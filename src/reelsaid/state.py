@@ -280,6 +280,19 @@ class State:
             return None
         return await self._get(_key("staged", lease.video_id))
 
+    async def load_settlement(self, lease: Lease, claim_id: str) -> JsonObject | None:
+        if not self._owns(lease):
+            return None
+        return await self._get(_key("settlement", lease.video_id, claim_id))
+
+    async def save_settlement(self, lease: Lease, claim_id: str, record: JsonObject) -> None:
+        if not self._owns(lease):
+            raise StateUnavailable("Billing ownership was lost")
+        async with self._guards[lease.slot]:
+            if not await self._renew_active(lease):
+                raise StateUnavailable("Billing ownership was lost")
+            await self._set(_key("settlement", lease.video_id, claim_id), record)
+
     async def commit(self, lease: Lease, options: TranscriptOptions, status: Status, payload: JsonObject) -> bool:
         if not self._owns(lease) or lease.claim_id not in self._staged or status not in {"success", "partial", "skipped"}:
             return False

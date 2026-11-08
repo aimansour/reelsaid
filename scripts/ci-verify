@@ -23,7 +23,7 @@ case "$1" in
         npm exec --yes --package=apify-cli@1.11.0 -- apify validate-schema
         ;;
     cloud)
-        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-output.sh
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-billing.sh
         ;;
     fail)
         exit 1
