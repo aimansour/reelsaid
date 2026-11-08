@@ -183,86 +183,60 @@ def main():
             f"{BASE}/api/v1/media/{media_id(code)}/info/", headers=BASE_HEADERS, timeout=8))
     for name in (PERSONAL, PROFILE):
         profile = f"{BASE}/{name}/"
+        reels = profile + "reels/"
+
+        def clips(response):
+            if response is None:
+                return None
+            for value in json_values(response.text):
+                for node in walk(value):
+                    connection = node.get("polaris_clips_connection")
+                    if isinstance(connection, dict) and isinstance(connection.get("edges"), list):
+                        return node
+            return None
+
+        def page_record(route, node):
+            if not node:
+                emit({"route": route, "outcome": "no_listing"})
+                return set(), {}
+            connection = node["polaris_clips_connection"]
+            entries = []
+            for edge in connection["edges"]:
+                media = edge.get("node") or {}
+                if media.get("code"):
+                    entries.append({k: media.get(k) for k in ("code", "product_type", "play_count",
+                                    "like_count", "comment_count", "clips_tab_pinned_user_ids")})
+            page = connection.get("page_info") or {}
+            emit({"route": route, "profilePk": node.get("pk"), "profileRelayId": node.get("id"),
+                  "count": len(entries), "hasNext": page.get("has_next_page"),
+                  "hasCursor": bool(page.get("end_cursor")), "entries": entries[:4]})
+            return {entry["code"] for entry in entries}, page
+
+        nav_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+                       "Sec-CH-UA": '"Not-A.Brand";v="99", "Google Chrome";v="157", "Chromium";v="157"',
+                       "Sec-CH-UA-Platform": '"Windows"', "Sec-CH-UA-Mobile": "?0",
+                       "Accept-Language": "ar-EG,ar;q=0.9,en;q=0.8",
+                       "Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "navigate",
+                       "Sec-Fetch-Dest": "document", "Sec-Fetch-User": "?1"}
         with requests.Session(impersonate="chrome", trust_env=False) as fresh:
-            fetch(f"profile-fresh-{name}", lambda: fresh.get(profile + "?hl=en", timeout=8,
-                  headers={"Referer": "https://www.google.com/"}))
-            fetch(f"profile-embed-{name}", lambda: fresh.get(profile + "embed/", timeout=8))
-            fetch(f"profile-posts-{name}", lambda: fresh.get(profile + "posts/", timeout=8))
-        with requests.Session(impersonate="safari_ios", trust_env=False) as mobile:
-            fetch(f"profile-mobile-{name}", lambda: mobile.get(profile, timeout=8))
-        profile_response = fetch(f"profile-by-id-graphql-{name}", lambda: graphql(
-            session, profile, "27937681195819736", "PolarisProfilePageContentQuery",
-            {"id": PROFILE_IDS[name], "render_surface": "PROFILE", "enable_integrity_filters": True,
-             "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": True,
-             "__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider": False,
-             "__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider": False,
-             "__relay_internal__pv__PolarisWebSchoolsEnabledrelayprovider": False}, lsd=lsd))
-        user = {}
-        if profile_response is not None:
-            for value in json_values(profile_response.text):
-                user = next((node for node in walk(value) if node.get("username") == name
-                             and (node.get("id") or node.get("pk"))), {})
-                if user:
-                    break
-        keys = {str(user[k]) for k in ("id", "pk") if user.get(k)}
-        keys.add(PROFILE_IDS[name])
-        for index, identity in enumerate(sorted(keys)):
-            listing = fetch(f"logged-out-by-resolved-id-{name}-{index}", lambda: graphql(
-                session, profile, "28904005159232689", "PolarisLoggedOutDesktopWWWProfilePostsTabContentQuery_connection",
-                {"id": identity, "first": 12, "after": None, "before": None,
-                 "__relay_internal__pv__PolarisSEOIsCrawlerrelayprovider": False}, lsd=lsd))
-            if listing is not None:
-                for value in json_values(listing.text):
-                    if not isinstance(value, dict):
-                        continue
-                    emit({"route": f"listing-structure-{name}-{index}",
-                          "dataKeys": list((value.get("data") or {}).keys()),
-                          "nodeKeys": list(((value.get("data") or {}).get("node") or {}).keys())[:25],
-                          "graphError": [e.get("message", "")[:180] for e in value.get("errors") or []]})
-        fetch(f"reels-legacy-endpoint-{name}", lambda: graphql(
-            session, profile, "7845543455542541", "PolarisProfileReelsTabContentQuery_connection",
-            {"data": {"page_size": 12, "include_feed_video": True, "target_user_id": PROFILE_IDS[name]}},
-            lsd=lsd, endpoint="/graphql/query"))
-        fetch(f"legacy-topsearch-{name}", lambda: session.get(
-            BASE + "/web/search/topsearch/", params={"query": name, "context": "blended"},
-            headers=BASE_HEADERS, timeout=8))
-        fetch(f"profile-deeplink-{name}", lambda: session.get(
-            f"{BASE}/_u/{name}/", timeout=8))
-        fetch(f"profile-posts-graphql-{name}", lambda: graphql(
-            session, profile, "29104886249145907", "PolarisProfilePostsTabContentQuery_connection",
-            {"data": {"count": 12, "include_reel_media_seen_timestamp": True,
-                      "include_relationship_info": True, "latest_besties_reel_media": True,
-                      "latest_reel_media": True}, "first": 12, "include_multi_captions": True,
-             "username": name, "__relay_internal__pv__PolarisMultiCaptionCarouselEnabledrelayprovider": True,
-             "__relay_internal__pv__PolarisShortDramaEnabledrelayprovider": True,
-             "__relay_internal__pv__PolarisSEOIsCrawlerrelayprovider": False,
-             "__relay_internal__pv__PolarisThreadsStyleCommentsEnabledrelayprovider": False,
-             "__relay_internal__pv__PolarisReelsRecoDebugOverlayEnabledrelayprovider": False}, lsd=lsd))
-        fetch(f"logged-out-profile-posts-{name}", lambda: graphql(
-            session, profile, "28904005159232689", "PolarisLoggedOutDesktopWWWProfilePostsTabContentQuery_connection",
-            {"id": PROFILE_IDS[name], "__relay_internal__pv__PolarisSEOIsCrawlerrelayprovider": False}, lsd=lsd))
-        fetch(f"topsearch-{name}", lambda: session.get(
-            BASE + "/api/v1/web/search/topsearch/", params={"query": name, "context": "blended"},
-            headers=BASE_HEADERS, timeout=8))
-        fetch(f"mobile-user-{name}", lambda: session.get(
-            f"https://i.instagram.com/api/v1/users/{PROFILE_IDS[name]}/info/",
-            headers={"User-Agent": "Instagram 269.0.0.18.75 Android", "X-IG-App-ID": "567067343352427"},
-            timeout=8))
-        start = monotonic()
-        try:
-            tested = subprocess.run(["python", "-c", """
-import instaloader, json, sys
-loader = instaloader.Instaloader(max_connection_attempts=1, request_timeout=8, sleep=False)
-profile = instaloader.Profile.from_username(loader.context, sys.argv[1])
-print(json.dumps({"isPrivate": profile.is_private, "pk": profile.userid,
-                  "firstCode": next(iter(profile.get_posts()), None).shortcode}))
-""", name], capture_output=True, text=True, timeout=25)
-            emit({"route": f"instaloader-profile-{name}", "exit": tested.returncode,
-                  "result": json.loads(tested.stdout) if tested.returncode == 0 else None,
-                  "error": tested.stderr.splitlines()[-1][:220] if tested.returncode and tested.stderr else None,
-                  "milliseconds": round((monotonic() - start) * 1000)})
-        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
-            emit({"route": f"instaloader-profile-{name}", "error": type(exc).__name__})
+            page_record(f"guest-html-clips-{name}", clips(fetch(f"guest-reels-html-{name}", lambda: fresh.get(
+                reels, headers=nav_headers, timeout=8))))
+
+        fetch(f"guest-profile-query-{name}", lambda: graphql(
+            session, reels, "27981003384861049", "PolarisLoggedOutDesktopWWWProfileRootContentQuery",
+            {"username": name}, lsd=lsd))
+        listing = fetch(f"guest-clips-query-{name}", lambda: graphql(
+            session, reels, "27838951732404191", "PolarisLoggedOutDesktopWWWProfileReelsTabContentQuery",
+            {"username": name, "first": 12}, lsd=lsd))
+        first = clips(listing)
+        first_codes, page_info = page_record(f"guest-clips-first-{name}", first)
+        if first and page_info.get("has_next_page") and page_info.get("end_cursor"):
+            followup = fetch(f"guest-clips-next-query-{name}", lambda: graphql(
+                session, reels, "27420265870989234", "PolarisLoggedOutDesktopWWWProfileReelsTabContentQuery_connection",
+                {"id": first["id"], "first": 12, "after": page_info["end_cursor"]}, lsd=lsd))
+            second_codes, _ = page_record(f"guest-clips-second-{name}", clips(followup))
+            emit({"route": f"guest-clips-pagination-{name}", "firstCount": len(first_codes),
+                  "secondCount": len(second_codes), "newCodes": len(second_codes - first_codes)})
     emit(from_library("yt-dlp-short", ["python", "-m", "yt_dlp", "--no-config", "--no-playlist",
                                       "--socket-timeout", "7", "--retries", "0", "--skip-download",
                                       "--dump-single-json", f"{BASE}/reel/{SHORT}/"]))
