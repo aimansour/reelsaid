@@ -18,6 +18,9 @@ case "$1" in
         ./scripts/verify all
         npm exec --yes --package=apify-cli@1.11.0 -- apify validate-schema .actor/input_schema.json
         ;;
+    cloud)
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-discovery.sh
+        ;;
     fail)
         exit 1
         ;;

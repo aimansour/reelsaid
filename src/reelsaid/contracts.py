@@ -1,6 +1,14 @@
+from __future__ import annotations
+
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
-from typing import Generic, Literal, TypeVar
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Generic, Literal, TypeVar
+
+if TYPE_CHECKING:
+    from apify_client import ApifyClientAsync
+
+    from .instagram import InstagramClient
 
 
 JsonObject = dict[str, object]
@@ -13,6 +21,7 @@ T = TypeVar("T")
 class InputRef:
     field: str
     index: int | None = None
+    item_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -70,3 +79,42 @@ class InputPlan:
     filters: FilterOptions
     options: RunOptions
     valid_options: bool = True
+
+
+@dataclass(frozen=True)
+class VideoMetadata:
+    post_url: str | None = None
+    shortcode: str | None = None
+    media_id: str | None = None
+    publisher: str | None = None
+    discovery_profiles: tuple[str, ...] = ()
+    coauthors: tuple[str, ...] = ()
+    caption: str | None = None
+    published_at: datetime | None = None
+    duration_seconds: float | None = None
+    cover_url: str | None = None
+    audio: JsonObject | None = None
+    view_count: int | None = None
+    play_count: int | None = None
+    like_count: int | None = None
+    comment_count: int | None = None
+    carousel_position: int | None = None
+    pinned: bool | None = None
+
+
+@dataclass(frozen=True)
+class VideoRef:
+    video_id: str
+    metadata: VideoMetadata
+    provenance: tuple[InputRef, ...]
+    video_url: str | None = None
+    audio_url: str | None = None
+    alternate_video_urls: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class RunContext:
+    instagram: InstagramClient
+    apify: ApifyClientAsync
+    now: datetime
+    expired: Callable[[], bool]

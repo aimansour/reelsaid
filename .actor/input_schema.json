@@ -27,7 +27,9 @@
             "title": "Source Apify dataset ID",
             "description": "Read accessible Instagram video records from a previous Actor run.",
             "type": "string",
-            "editor": "textfield"
+            "editor": "resourcePicker",
+            "resourceType": "dataset",
+            "resourcePermissions": ["READ"]
         },
         "datasetItems": {
             "title": "Inline dataset records",
@@ -151,7 +153,9 @@
             "title": "Resume from a prior run dataset",
             "description": "Continue unfinished work from a previous ReelSaid run in your account. Completed and paid results remain available in the original run.",
             "type": "string",
-            "editor": "textfield"
+            "editor": "resourcePicker",
+            "resourceType": "dataset",
+            "resourcePermissions": ["READ"]
         }
     }
 }
