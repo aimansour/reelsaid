@@ -203,11 +203,11 @@ def standby_benchmark(actor, endpoint, payload, record, *, case, cache_condition
     request("PUT", record, report)
 
 
-def launch():
-    fixtures = json.loads(Path("tests/fixtures/market-reels.json").read_text())
-    cases = fixtures.get("launchRuns", [])
-    if not cases:
+def launch(group):
+    if group == "contract":
         return
+    manifest = json.loads(Path("tests/fixtures/launch-runs.json").read_text())
+    cases = manifest[group]
     store = request("GET", f"key-value-stores/{STORE}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
@@ -259,7 +259,7 @@ def main():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--launch"]:
-        launch()
+    if sys.argv[1:2] == ["--launch"]:
+        launch(sys.argv[2] if len(sys.argv) > 2 else "contract")
     else:
         main()
