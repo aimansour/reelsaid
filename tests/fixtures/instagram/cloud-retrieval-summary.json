@@ -1,0 +1,356 @@
+{
+  "post-page-DS46KJNjva9": {
+    "route": "post-page-DS46KJNjva9",
+    "milliseconds": 803,
+    "targetPublisher": "jayshetty",
+    "targetCoauthors": [],
+    "targetChildChecks": [],
+    "targetVideoVariants": 3,
+    "targetVideoChildren": 0,
+    "targetCdnProbe": {
+      "http": 206,
+      "contentType": "video/mp4"
+    },
+    "listingAnchors": 10,
+    "profileNode": true,
+    "http": 200,
+    "bytes": 818058,
+    "finalHost": "www.instagram.com",
+    "loginRedirect": false,
+    "videoUrlCount": 10,
+    "hasCursor": true,
+    "hasCarousel": false,
+    "profile": null,
+    "fields": [
+      "caption",
+      "clips_metadata",
+      "coauthor_producers",
+      "comment_count",
+      "like_count",
+      "polaris_ordered_timeline_connection",
+      "taken_at",
+      "video_versions",
+      "xig_polaris_media"
+    ],
+    "errors": []
+  },
+  "post-graphql-DS46KJNjva9": {
+    "route": "post-graphql-DS46KJNjva9",
+    "milliseconds": 604,
+    "targetPublisher": "jayshetty",
+    "targetCoauthors": [],
+    "targetChildChecks": [],
+    "targetVideoVariants": 3,
+    "targetVideoChildren": 0,
+    "targetCdnProbe": {
+      "http": 206,
+      "contentType": "video/mp4"
+    },
+    "listingAnchors": 0,
+    "profileNode": true,
+    "http": 200,
+    "bytes": 370849,
+    "finalHost": "www.instagram.com",
+    "loginRedirect": false,
+    "videoUrlCount": 10,
+    "hasCursor": true,
+    "hasCarousel": false,
+    "profile": null,
+    "fields": [
+      "caption",
+      "clips_metadata",
+      "coauthor_producers",
+      "comment_count",
+      "like_count",
+      "polaris_ordered_timeline_connection",
+      "taken_at",
+      "video_versions",
+      "xig_polaris_media"
+    ],
+    "errors": []
+  },
+  "post-page-Ddm6E9OGt5D": {
+    "route": "post-page-Ddm6E9OGt5D",
+    "milliseconds": 2069,
+    "targetPublisher": "lyssamariexo",
+    "targetCoauthors": [],
+    "targetChildChecks": [
+      {
+        "position": 2,
+        "id": "3992133437724680498",
+        "http": 206
+      },
+      {
+        "position": 6,
+        "id": "3992133466799582399",
+        "http": 206
+      },
+      {
+        "position": 10,
+        "id": "3992133471463607204",
+        "http": 206
+      }
+    ],
+    "targetVideoVariants": 0,
+    "targetVideoChildren": 3,
+    "targetCdnProbe": null,
+    "listingAnchors": 10,
+    "profileNode": true,
+    "http": 200,
+    "bytes": 1048622,
+    "finalHost": "www.instagram.com",
+    "loginRedirect": false,
+    "videoUrlCount": 21,
+    "hasCursor": true,
+    "hasCarousel": true,
+    "profile": null,
+    "fields": [
+      "caption",
+      "clips_metadata",
+      "coauthor_producers",
+      "comment_count",
+      "like_count",
+      "polaris_ordered_timeline_connection",
+      "taken_at",
+      "video_versions",
+      "xig_polaris_media"
+    ],
+    "errors": []
+  },
+  "post-graphql-Ddm6E9OGt5D": {
+    "route": "post-graphql-Ddm6E9OGt5D",
+    "milliseconds": 663,
+    "targetPublisher": "lyssamariexo",
+    "targetCoauthors": [],
+    "targetChildChecks": [
+      {
+        "position": 2,
+        "id": "3992133437724680498",
+        "http": 206
+      },
+      {
+        "position": 6,
+        "id": "3992133466799582399",
+        "http": 206
+      },
+      {
+        "position": 10,
+        "id": "3992133471463607204",
+        "http": 206
+      }
+    ],
+    "targetVideoVariants": 0,
+    "targetVideoChildren": 3,
+    "targetCdnProbe": null,
+    "listingAnchors": 0,
+    "profileNode": true,
+    "http": 200,
+    "bytes": 598027,
+    "finalHost": "www.instagram.com",
+    "loginRedirect": false,
+    "videoUrlCount": 21,
+    "hasCursor": true,
+    "hasCarousel": true,
+    "profile": null,
+    "fields": [
+      "caption",
+      "clips_metadata",
+      "coauthor_producers",
+      "comment_count",
+      "like_count",
+      "polaris_ordered_timeline_connection",
+      "taken_at",
+      "video_versions",
+      "xig_polaris_media"
+    ],
+    "errors": []
+  },
+  "post-graphql-CsuFa_Mga41": {
+    "route": "post-graphql-CsuFa_Mga41",
+    "milliseconds": 353,
+    "targetPublisher": "astro_kjell",
+    "targetCoauthors": [],
+    "targetChildChecks": [],
+    "targetVideoVariants": 3,
+    "targetVideoChildren": 0,
+    "targetCdnProbe": {
+      "http": 206,
+      "contentType": "video/mp4"
+    },
+    "listingAnchors": 0,
+    "profileNode": true,
+    "http": 200,
+    "bytes": 358209,
+    "finalHost": "www.instagram.com",
+    "loginRedirect": false,
+    "videoUrlCount": 4,
+    "hasCursor": true,
+    "hasCarousel": false,
+    "profile": {
+      "username": "astro_kjell",
+      "is_private": false,
+      "is_professional_account": null,
+      "account_type": null,
+      "id": "17841402021239270",
+      "pk": "2074163374"
+    },
+    "fields": [
+      "caption",
+      "clips_metadata",
+      "coauthor_producers",
+      "comment_count",
+      "like_count",
+      "polaris_ordered_timeline_connection",
+      "taken_at",
+      "video_versions",
+      "xig_polaris_media"
+    ],
+    "errors": []
+  },
+  "post-graphql-DfaaAP7BvIu": {
+    "route": "post-graphql-DfaaAP7BvIu",
+    "milliseconds": 1469,
+    "targetPublisher": "nasajohnson",
+    "targetCoauthors": [
+      "iss",
+      "nasa"
+    ],
+    "targetChildChecks": [],
+    "targetVideoVariants": 3,
+    "targetVideoChildren": 0,
+    "targetCdnProbe": {
+      "http": 206,
+      "contentType": "video/mp4"
+    },
+    "listingAnchors": 0,
+    "profileNode": true,
+    "http": 200,
+    "bytes": 377514,
+    "finalHost": "www.instagram.com",
+    "loginRedirect": false,
+    "videoUrlCount": 10,
+    "hasCursor": true,
+    "hasCarousel": false,
+    "profile": null,
+    "fields": [
+      "caption",
+      "clips_metadata",
+      "coauthor_producers",
+      "comment_count",
+      "like_count",
+      "polaris_ordered_timeline_connection",
+      "taken_at",
+      "video_versions",
+      "xig_polaris_media"
+    ],
+    "errors": []
+  },
+  "guest-clips-first-astro_kjell": {
+    "route": "guest-clips-first-astro_kjell",
+    "profilePk": "2074163374",
+    "profileRelayId": "17841402021239270",
+    "count": 1,
+    "hasNext": false,
+    "hasCursor": true,
+    "entries": [
+      {
+        "code": "CsuFa_Mga41",
+        "product_type": "clips",
+        "play_count": 33540,
+        "like_count": 1317,
+        "comment_count": 19,
+        "clips_tab_pinned_user_ids": []
+      }
+    ]
+  },
+  "guest-clips-first-nasa": {
+    "route": "guest-clips-first-nasa",
+    "profilePk": "528817151",
+    "profileRelayId": "17841401474538262",
+    "count": 12,
+    "hasNext": true,
+    "hasCursor": true,
+    "entries": [
+      {
+        "code": "DfdV-dGPQVX",
+        "product_type": "clips",
+        "play_count": 1011785,
+        "like_count": 17927,
+        "comment_count": 257,
+        "clips_tab_pinned_user_ids": []
+      },
+      {
+        "code": "DfdSpM1PMVs",
+        "product_type": "clips",
+        "play_count": 1217961,
+        "like_count": 15742,
+        "comment_count": 106,
+        "clips_tab_pinned_user_ids": []
+      },
+      {
+        "code": "Dfc1mYxFevS",
+        "product_type": "clips",
+        "play_count": 1703400,
+        "like_count": 44174,
+        "comment_count": 551,
+        "clips_tab_pinned_user_ids": []
+      },
+      {
+        "code": "DfcY5c7Prno",
+        "product_type": "clips",
+        "play_count": 3634845,
+        "like_count": 63157,
+        "comment_count": 5645,
+        "clips_tab_pinned_user_ids": []
+      }
+    ]
+  },
+  "guest-clips-second-nasa": {
+    "route": "guest-clips-second-nasa",
+    "profilePk": null,
+    "profileRelayId": "17841401474538262",
+    "count": 12,
+    "hasNext": true,
+    "hasCursor": true,
+    "entries": [
+      {
+        "code": "DeSM5CYPDfd",
+        "product_type": "clips",
+        "play_count": 3747575,
+        "like_count": 61761,
+        "comment_count": 652,
+        "clips_tab_pinned_user_ids": []
+      },
+      {
+        "code": "DePHLhtON_i",
+        "product_type": "clips",
+        "play_count": 3233863,
+        "like_count": 103342,
+        "comment_count": 1030,
+        "clips_tab_pinned_user_ids": []
+      },
+      {
+        "code": "DeMIwYYPAMt",
+        "product_type": "clips",
+        "play_count": 4869109,
+        "like_count": 91362,
+        "comment_count": 592,
+        "clips_tab_pinned_user_ids": []
+      },
+      {
+        "code": "DeIXf9SNQVO",
+        "product_type": "clips",
+        "play_count": 2876927,
+        "like_count": 22158,
+        "comment_count": 318,
+        "clips_tab_pinned_user_ids": []
+      }
+    ]
+  },
+  "guest-clips-pagination-nasa": {
+    "route": "guest-clips-pagination-nasa",
+    "firstCount": 12,
+    "secondCount": 12,
+    "newCodes": 12
+  }
+}
