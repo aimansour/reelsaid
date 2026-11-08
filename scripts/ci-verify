@@ -15,12 +15,16 @@ case "$1" in
             "$uv_environment/bin/pip" install --disable-pip-version-check uv==0.12.23
             export PATH="$uv_environment/bin:$PATH"
         fi
+        if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -y --no-install-recommends ffmpeg
+        fi
         ./scripts/verify all
         node --check services/state/worker.mjs
         npm exec --yes --package=apify-cli@1.11.0 -- apify validate-schema .actor/input_schema.json
         ;;
     cloud)
-        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-discovery.sh
+        npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-state.py
         ;;
     fail)
         exit 1
