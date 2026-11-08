@@ -9,7 +9,7 @@ market = run_path(str(Path(__file__).with_name("benchmark-market.py")))
 request, benchmark = market["request"], market["benchmark"]
 store_name = market["STORE"]
 actor = "aimansour~reelsaid"
-campaign = "candidate"
+campaign = "allocation"
 
 
 def main():
@@ -30,13 +30,8 @@ def main():
     ]))
     common = {"forceRefresh": True}
     cases = [
-        ("single-256", {"startUrls": [market_fixture["referenceReel"]]}, 256, 55),
-        ("profile-1024", {"profiles": [market_fixture["profile"]], "maxResults": 12}, 1024, 100),
         ("profile-2048", {"profiles": [market_fixture["profile"]], "maxResults": 12}, 2048, 100),
-        ("batch-1024", {"startUrls": larger}, 1024, 150),
         ("batch-2048", {"startUrls": larger}, 2048, 150),
-        ("languages-512", {"shortcodes": ["DfevQ5bAKwu", "Dfeef1pFb34", "DfeNNYmiSZE", "DfdRlxUkbK5",
-                                         "Dfax6SllBLR", "DS46KJNjva9"]}, 512, 90),
     ]
     for label, payload, memory, timeout in cases:
         benchmark(actor, {**payload, **common}, 0.30, f"{path}/reelsaid-{campaign}-{label}",

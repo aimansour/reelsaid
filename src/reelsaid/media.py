@@ -21,7 +21,7 @@ from .instagram import InstagramError
 
 
 PROBE_BYTES = 64 * 1024
-MAX_INDEX_BYTES = 512 * 1024
+MAX_INDEX_BYTES = 2 * 1024 * 1024
 LOCAL_MEDIA_FORMATS = "mov,mp3,aac,wav,flac,ogg,matroska,webm"
 REDIRECTS = {301, 302, 303, 307, 308}
 

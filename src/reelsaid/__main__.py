@@ -74,7 +74,7 @@ async def main() -> None:
                 pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"], journal)
                 provider = ApifyCharges(scoped_run) if pricing.charges_enabled else None
                 memory = details.options.memory_mbytes
-                concurrency = 4 if memory >= 512 else 2 if memory >= 256 else 1
+                concurrency = 8 if memory >= 2048 else 4 if memory >= 512 else 2 if memory >= 256 else 1
                 if keys := environ.get("REELSAID_GROQ_KEYS"):
                     accounts = load_accounts(keys, environ.get("REELSAID_GROQ_LIMITS", "{}"))
                     groq = GroqAdapter(

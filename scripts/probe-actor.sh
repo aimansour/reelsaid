@@ -38,7 +38,8 @@ if ! jq -e 'any(.data.envVars[]?; .name == "REELSAID_GROQ_KEYS" and .isSecret ==
 fi
 
 prefill=$(jq -c '{startUrls: .properties.startUrls.prefill, forceRefresh: true, wordLevelTimestamps: true}' .actor/input_schema.json)
-run_actor prefill "$prefill"
+run_actor prefill "$prefill" '{"timeout":90,"waitForFinish":60}'
+jq -e '.data.options.memoryMbytes == 256' "$workspace/prefill-run.json"
 jq -e 'length == 1 and .[0].status == "success" and .[0].language == "en" and
     .[0].wordCount >= 20 and (.[0].wordLevelTimestamps | length >= 20) and
     .[0].subtitles.srt != null and .[0].subtitles.vtt != null' "$workspace/prefill-rows.json"
