@@ -1,0 +1,70 @@
+{
+    "actorKeyValueStoreSchemaVersion": 1,
+    "title": "ReelSaid files and run summary",
+    "collections": {
+        "summary": {
+            "title": "Run summary",
+            "description": "Counts for one run, confirmed charges, and continuation details.",
+            "key": "SUMMARY",
+            "contentTypes": ["application/json"],
+            "jsonSchema": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "schemaVersion", "submitted", "discovered", "unique", "duplicate", "successful", "partial",
+                    "failed", "skipped", "deferred", "inputErrors", "cached", "billed", "unresolvedCharges",
+                    "billedMinutes", "confirmedChargeUsd", "chargedEvents", "reasonCounts", "watchlistId",
+                    "newAnswers", "previouslyAnswered", "stopReason", "continuation"
+                ],
+                "properties": {
+                    "schemaVersion": { "const": 1 },
+                    "submitted": { "$ref": "#/definitions/count", "description": "Number of submitted source items before discovery." },
+                    "discovered": { "$ref": "#/definitions/count", "description": "Video occurrences found across all sources, including duplicates." },
+                    "unique": { "$ref": "#/definitions/count", "description": "Distinct videos after identity normalization, including individual carousel videos." },
+                    "duplicate": { "$ref": "#/definitions/count" },
+                    "successful": { "$ref": "#/definitions/count" },
+                    "partial": { "$ref": "#/definitions/count" },
+                    "failed": { "$ref": "#/definitions/count" },
+                    "skipped": { "$ref": "#/definitions/count" },
+                    "deferred": { "$ref": "#/definitions/count" },
+                    "inputErrors": { "$ref": "#/definitions/count", "description": "Unresolved input rows counted separately from video statuses." },
+                    "cached": { "$ref": "#/definitions/count" },
+                    "billed": { "$ref": "#/definitions/count" },
+                    "unresolvedCharges": { "$ref": "#/definitions/count" },
+                    "billedMinutes": { "$ref": "#/definitions/count" },
+                    "confirmedChargeUsd": { "type": "number", "minimum": 0 },
+                    "chargedEvents": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+                    "reasonCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+                    "watchlistId": { "type": ["string", "null"] },
+                    "newAnswers": { "$ref": "#/definitions/count" },
+                    "previouslyAnswered": { "$ref": "#/definitions/count" },
+                    "stopReason": { "type": ["string", "null"] },
+                    "continuation": {
+                        "type": ["object", "null"],
+                        "required": ["resumeFromDatasetId", "remaining", "reason"],
+                        "additionalProperties": false,
+                        "properties": {
+                            "resumeFromDatasetId": { "type": "string" },
+                            "remaining": { "type": ["integer", "null"], "minimum": 0 },
+                            "reason": { "type": "string" }
+                        }
+                    }
+                },
+                "definitions": { "count": { "type": "integer", "minimum": 0 } }
+            }
+        },
+        "srt": {
+            "title": "SRT subtitles",
+            "description": "Original-language SRT subtitle files.",
+            "keyPrefix": "subtitle-srt-",
+            "contentTypes": ["application/x-subrip"]
+        },
+        "vtt": {
+            "title": "WebVTT subtitles",
+            "description": "Original-language WebVTT subtitle files.",
+            "keyPrefix": "subtitle-vtt-",
+            "contentTypes": ["text/vtt"]
+        }
+    }
+}

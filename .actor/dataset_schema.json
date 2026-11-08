@@ -1,0 +1,204 @@
+{
+    "actorSpecification": 1,
+    "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "ReelSaid result row",
+        "description": "A video transcript or a structured outcome for an input. All rows use schema version 1.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+            "schemaVersion", "kind", "videoId", "status", "errorCode", "retryable", "provenance",
+            "transcript", "language", "durationSeconds", "wordCount", "segments", "timingGranularity",
+            "wordLevelTimestamps", "hook", "transcriptSource", "metadata", "quality", "subtitles",
+            "charged", "billedMinutes", "chargedEvents", "confirmedChargeUsd", "cached",
+            "isNew", "firstSeenAt", "firstSeenRunId"
+        ],
+        "properties": {
+            "schemaVersion": { "const": 1, "title": "Schema version", "example": 1 },
+            "kind": { "enum": ["video", "input"], "title": "Row kind", "description": "Distinguishes a video result from an unresolved input." },
+            "videoId": { "type": ["string", "null"], "title": "Video identity", "description": "Stable identity of a distinct video or carousel child.", "example": "DS46KJNjva9" },
+            "status": { "enum": ["success", "partial", "skipped", "failed", "deferred"], "title": "Processing status", "example": "success" },
+            "errorCode": {
+                "title": "Outcome reason",
+                "description": "Stable code for a failed, partial, deferred, or skipped result. Null when no reason applies.",
+                "enum": [
+                    null, "AUDIO_PREPARATION_FAILED", "BELOW_MIN_DURATION", "BELOW_MIN_LIKES", "BELOW_MIN_VIEWS",
+                    "BILLING_UNRESOLVED", "BILLING_REJECTED", "BUDGET_LIMIT", "CONTENT_PRIVATE", "CONTENT_REMOVED",
+                    "CONTENT_UNAVAILABLE", "DATASET_ACCESS_DENIED", "DATASET_READ_FAILED", "DATASET_UNAVAILABLE",
+                    "DURATION_LIMIT", "EMPTY_DATASET", "EMPTY_PROFILE", "FILTER_METADATA_MISSING",
+                    "INSTAGRAM_UNAVAILABLE", "INVALID_DATASET_ID", "INVALID_DATASET_ITEM", "INVALID_INPUT",
+                    "INVALID_MEDIA_DESTINATION", "INVALID_MEDIA_RESPONSE", "INVALID_OPTION", "INVALID_PROFILE",
+                    "INVALID_REDIRECT", "INVALID_SHORTCODE", "INVALID_URL", "MEDIA_ACCESS_DENIED",
+                    "MEDIA_DURATION_UNAVAILABLE", "MEDIA_FETCH_FAILED", "MEDIA_IDENTITY_CHANGED",
+                    "MEDIA_INSPECTION_FAILED", "MEDIA_NOT_FOUND", "MEDIA_URL_EXPIRED", "MUSIC_ONLY", "NO_AUDIO",
+                    "NO_SOURCE", "NO_SPEECH", "NO_VIDEO", "OUTSIDE_DATE_RANGE", "PINNED",
+                    "PROFILE_DISCOVERY_UNAVAILABLE", "PROFILE_PAGINATION_UNAVAILABLE",
+                    "PROVIDER_MEDIA_FETCH_FAILED", "PROVIDER_RATE_LIMITED", "PROVIDER_UNAVAILABLE",
+                    "QUALITY_LIMIT_EXCEEDED", "QUALITY_UNVERIFIED", "RESULT_LIMIT", "SILENCE",
+                    "STATE_UNAVAILABLE", "TEMPORARILY_BLOCKED", "TIME_LIMIT", "TRANSCRIPTION_FAILED",
+                    "TRANSCRIPT_PARTIAL", "UNKNOWN_INPUT", "UNSUPPORTED_LANGUAGE", "VIDEO_IN_PROGRESS",
+                    "ALREADY_ANSWERED", "RESUME_UNAVAILABLE", "INTERNAL_ERROR"
+                ],
+                "example": "MEDIA_URL_EXPIRED"
+            },
+            "retryable": { "type": "boolean", "title": "Retryable", "description": "Whether the caller can retry the unresolved work.", "example": false },
+            "provenance": { "type": "array", "items": { "$ref": "#/$defs/input" }, "title": "Input provenance", "description": "Submitted fields and zero-based indices that led to this result." },
+            "transcript": { "type": ["string", "null"], "title": "Original-language transcript", "description": "Full spoken text. An empty string denotes verified absence of usable speech. Null means no transcript was resolved." },
+            "language": { "type": ["string", "null"], "title": "Spoken language", "description": "The original language as an ISO code when recognized. Otherwise the detected language label, or null.", "example": "en" },
+            "durationSeconds": { "$ref": "#/$defs/nullableSeconds", "title": "Media duration in seconds", "example": 8.892 },
+            "wordCount": { "$ref": "#/$defs/nullableCount", "title": "Transcript word count", "description": "Counts timed words when available and Unicode word boundaries otherwise." },
+            "segments": { "type": "array", "items": { "$ref": "#/$defs/span" }, "title": "Timed transcript segments", "description": "Sentence timing when supported by word alignment, or the source's actual segment or caption timing." },
+            "timingGranularity": { "enum": ["sentence", "segment", "cue", null], "title": "Timing granularity" },
+            "wordLevelTimestamps": { "type": ["array", "null"], "items": { "$ref": "#/$defs/span" }, "title": "Word-level timestamps", "description": "Timed words when requested and available, with the available timestamp precision." },
+            "hook": {
+                "type": ["object", "null"],
+                "title": "Opening three-second hook",
+                "description": "Words spoken in the first three seconds, or fully contained timed cues when word timing is unavailable.",
+                "required": ["text", "startSeconds", "endSeconds", "timingGranularity"],
+                "additionalProperties": false,
+                "properties": {
+                    "text": { "type": "string" },
+                    "startSeconds": { "type": "number", "minimum": 0, "exclusiveMaximum": 3 },
+                    "endSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 3 },
+                    "timingGranularity": { "enum": ["word", "segment", "cue"] }
+                }
+            },
+            "transcriptSource": { "enum": ["asr", "captions", null], "title": "Transcript source", "description": "Whether speech recognition or timed original-language captions supplied the transcript." },
+            "metadata": { "$ref": "#/$defs/metadata", "title": "Instagram post and video metadata" },
+            "quality": {
+                "type": ["object", "null"],
+                "title": "Speech and coverage quality",
+                "required": ["speechClassification", "speechConfidence", "affectedFraction", "missingStart", "missingEnd", "missingInternal", "defects", "stopReason"],
+                "additionalProperties": false,
+                "properties": {
+                    "speechClassification": { "enum": ["speech", "silence", "music_only", "no_speech", "no_audio", "unknown"] },
+                    "speechConfidence": { "$ref": "#/$defs/nullableFraction" },
+                    "affectedFraction": { "$ref": "#/$defs/nullableFraction" },
+                    "missingStart": { "type": ["boolean", "null"] },
+                    "missingEnd": { "type": ["boolean", "null"] },
+                    "missingInternal": { "type": ["boolean", "null"] },
+                    "defects": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["startSeconds", "endSeconds", "reason"],
+                            "additionalProperties": false,
+                            "properties": {
+                                "startSeconds": { "type": "number", "minimum": 0 },
+                                "endSeconds": { "type": "number", "minimum": 0 },
+                                "reason": { "enum": ["missing_speech", "unsupported_speech", "repeated_text"] }
+                            }
+                        }
+                    },
+                    "stopReason": { "type": ["string", "null"] }
+                }
+            },
+            "subtitles": {
+                "type": "object",
+                "title": "Subtitle files",
+                "description": "Authenticated Apify record references for each generated subtitle format.",
+                "required": ["srt", "vtt"],
+                "additionalProperties": false,
+                "properties": { "srt": { "$ref": "#/$defs/file" }, "vtt": { "$ref": "#/$defs/file" } }
+            },
+            "charged": { "type": ["boolean", "null"], "title": "Charged", "description": "Whether this row was charged. Null denotes a charge whose final state is unresolved." },
+            "billedMinutes": { "$ref": "#/$defs/nullableCount", "title": "Billed minutes", "description": "Started minutes covered by confirmed charges." },
+            "chargedEvents": { "$ref": "#/$defs/events", "title": "Confirmed charged events" },
+            "confirmedChargeUsd": { "type": ["number", "null"], "minimum": 0, "title": "Confirmed charge in USD" },
+            "cached": { "type": "boolean", "title": "Cached result", "description": "True when the transcript was reused from a previous delivery.", "example": false },
+            "isNew": { "type": ["boolean", "null"], "title": "First answer for account" },
+            "firstSeenAt": { "type": ["string", "null"], "format": "date-time", "title": "First answer time" },
+            "firstSeenRunId": { "type": ["string", "null"], "title": "First answer run ID" }
+        },
+        "$defs": {
+            "nullableCount": { "type": ["integer", "null"], "minimum": 0 },
+            "nullableSeconds": { "type": ["number", "null"], "minimum": 0 },
+            "nullableFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "events": { "type": ["object", "null"], "additionalProperties": { "type": "integer", "minimum": 1 } },
+            "span": {
+                "type": "object",
+                "required": ["text", "startSeconds", "endSeconds"],
+                "additionalProperties": false,
+                "properties": {
+                    "text": { "type": "string" },
+                    "startSeconds": { "type": "number", "minimum": 0 },
+                    "endSeconds": { "type": "number", "minimum": 0 }
+                }
+            },
+            "input": {
+                "type": "object",
+                "required": ["field", "index", "itemIndex"],
+                "additionalProperties": false,
+                "properties": {
+                    "field": { "type": "string" },
+                    "index": { "$ref": "#/$defs/nullableCount" },
+                    "itemIndex": { "$ref": "#/$defs/nullableCount" }
+                }
+            },
+            "file": {
+                "type": ["object", "null"],
+                "required": ["key", "url", "contentType"],
+                "additionalProperties": false,
+                "properties": {
+                    "key": { "type": "string" },
+                    "url": { "type": "string", "format": "uri" },
+                    "contentType": { "enum": ["application/x-subrip", "text/vtt"] }
+                }
+            },
+            "metadata": {
+                "type": ["object", "null"],
+                "required": [
+                    "postUrl", "shortcode", "mediaId", "publisher", "discoveryProfiles", "coauthors", "caption",
+                    "publishedAt", "durationSeconds", "coverUrl", "audio", "videoUrl", "audioUrl",
+                    "viewCount", "playCount", "likeCount", "commentCount", "carouselPosition", "pinned"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "postUrl": { "type": ["string", "null"], "format": "uri", "description": "Canonical Instagram post link." },
+                    "shortcode": { "type": ["string", "null"], "description": "Instagram post shortcode." },
+                    "mediaId": { "type": ["string", "null"], "description": "Instagram media or carousel child ID." },
+                    "publisher": { "type": ["string", "null"], "description": "Account that originally published the post." },
+                    "discoveryProfiles": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Profiles where the video was discovered." },
+                    "coauthors": { "type": ["array", "null"], "items": { "type": "string" } },
+                    "caption": { "type": ["string", "null"], "description": "Caption written under the original Instagram post." },
+                    "publishedAt": { "type": ["string", "null"], "format": "date-time" },
+                    "durationSeconds": { "$ref": "#/$defs/nullableSeconds" },
+                    "coverUrl": { "type": ["string", "null"], "format": "uri" },
+                    "audio": { "type": ["object", "null"], "description": "Public information about the original audio or soundtrack." },
+                    "videoUrl": { "type": ["string", "null"], "format": "uri", "description": "Temporary direct video URL where available." },
+                    "audioUrl": { "type": ["string", "null"], "format": "uri", "description": "Temporary separate audio URL where available." },
+                    "viewCount": { "$ref": "#/$defs/nullableCount", "description": "Public views when the source supplies them separately from plays." },
+                    "playCount": { "$ref": "#/$defs/nullableCount", "description": "Public play count." },
+                    "likeCount": { "$ref": "#/$defs/nullableCount", "description": "Likes on the original post." },
+                    "commentCount": { "$ref": "#/$defs/nullableCount", "description": "Comments on the original post." },
+                    "carouselPosition": { "$ref": "#/$defs/nullableCount", "description": "Zero-based position in the original carousel." },
+                    "pinned": { "type": ["boolean", "null"] }
+                }
+            }
+        }
+    },
+    "views": {
+        "overview": {
+            "title": "Transcripts",
+            "transformation": { "fields": ["status", "videoId", "transcript", "hook", "language", "durationSeconds", "charged"] },
+            "display": {
+                "component": "table",
+                "properties": {
+                    "videoId": { "label": "Video ID", "format": "text" },
+                    "durationSeconds": { "label": "Seconds", "format": "number" },
+                    "charged": { "label": "Charged", "format": "boolean" }
+                }
+            }
+        },
+        "metadata": {
+            "title": "Instagram metadata",
+            "transformation": { "fields": ["videoId", "metadata", "provenance"] },
+            "display": { "component": "table" }
+        },
+        "quality": {
+            "title": "Quality and billing",
+            "transformation": { "fields": ["videoId", "status", "errorCode", "retryable", "quality", "cached", "billedMinutes", "chargedEvents"] },
+            "display": { "component": "table" }
+        }
+    }
+}

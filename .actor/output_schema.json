@@ -1,0 +1,31 @@
+{
+    "actorOutputSchemaVersion": 1,
+    "title": "Instagram Reels transcripts and subtitles",
+    "description": "Read versioned transcript rows, opening hooks, Instagram metadata, subtitle downloads, and the final run receipt.",
+    "properties": {
+        "results": {
+            "type": "string",
+            "title": "Transcript results",
+            "description": "Read one row per distinct Instagram video or unresolved input. Use status and retryable to handle batch outcomes.",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
+        },
+        "summary": {
+            "type": "string",
+            "title": "Run summary and billing receipt",
+            "description": "Read result counts, confirmed charges, watchlist activity, stop reasons, and the continuation reference.",
+            "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/SUMMARY"
+        },
+        "srtSubtitles": {
+            "type": "string",
+            "title": "SRT subtitles",
+            "description": "Find UTF-8 SRT files with the original-language transcript and its timing.",
+            "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys?collection=srt"
+        },
+        "webVttSubtitles": {
+            "type": "string",
+            "title": "WebVTT subtitles",
+            "description": "Find WebVTT caption files for timed transcripts.",
+            "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys?collection=vtt"
+        }
+    }
+}

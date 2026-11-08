@@ -309,8 +309,8 @@ class _DiscoveryRun:
         meta = object_value(item.get("metadata"))
         code = _text(meta.get("shortcode")) or _text(item.get("shortcode") or item.get("shortCode"))
         post_url = None
-        video_url = _cdn(item.get("videoUrl") or item.get("video_url") or item.get("webVideoUrl"))
-        audio_url = _cdn(item.get("audioUrl") or item.get("audio_url"))
+        video_url = _cdn(item.get("videoUrl") or item.get("video_url") or item.get("webVideoUrl") or meta.get("videoUrl"))
+        audio_url = _cdn(item.get("audioUrl") or item.get("audio_url") or meta.get("audioUrl"))
         captions = tuple(
             CaptionCandidate(url, _text(track.get("language")), track.get("isOriginal") is True)
             for track in records(item.get("captionTracks"))
