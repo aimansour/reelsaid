@@ -6,6 +6,7 @@ import os
 import re
 import string
 import subprocess
+from contextlib import closing
 from time import monotonic
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -77,7 +78,7 @@ def describe(response, target_code=None):
     media_probe = None
     if media and (urlparse(media).hostname or "").endswith((".cdninstagram.com", ".fbcdn.net")):
         try:
-            with requests.get(media, headers={"Range": "bytes=0-1023"}, stream=True, timeout=6) as cdn:
+            with closing(requests.get(media, headers={"Range": "bytes=0-1023"}, stream=True, timeout=6)) as cdn:
                 media_probe = {"http": cdn.status_code, "contentType": cdn.headers.get("content-type")}
         except requests.RequestsError as exc:
             media_probe = {"error": type(exc).__name__}
