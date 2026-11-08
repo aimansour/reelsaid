@@ -272,6 +272,7 @@ async def _refresh(ref: VideoRef, context: RunContext) -> VideoRef:
         video_url=matched.video_url,
         alternate_video_urls=matched.alternate_video_urls,
         audio_url=matched.audio_url or ref.audio_url,
+        dash_audio_url=matched.dash_audio_url,
         metadata=replace(
             ref.metadata,
             post_url=matched.metadata.post_url,
@@ -309,10 +310,23 @@ async def _inspect(ref: VideoRef, context: RunContext, client: MediaClient) -> O
         if first_error and source is None:
             raise first_error
         audio = source if source and source.has_audio else None
+        audio_error = None
         if audio is None and candidate.audio_url:
-            track = await fetch(candidate.audio_url)
-            if track.has_audio:
+            try:
+                track = await fetch(candidate.audio_url)
+                if track.has_audio:
+                    audio = track
+            except MediaError as error:
+                audio_error = error
+        if audio is None and candidate.dash_audio_url:
+            try:
+                track = await fetch(candidate.dash_audio_url)
+            except MediaError:
+                track = None
+            if track and track.has_audio and not track.has_video:
                 audio = track
+        if audio is None and audio_error:
+            raise audio_error
         video = source if source and source.has_video else None
         timeline = video or audio
         if timeline is None:

@@ -4,6 +4,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, replace
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -135,6 +136,23 @@ async def _decode_audio(path: Path) -> bytes:
     return data
 
 
+async def _speech_asset(media: MediaPlan, client: MediaClient, context: RunContext):
+    asset = media.audio
+    sidecar = media.ref.dash_audio_url
+    if not asset.file and sidecar and sidecar != asset.url:
+        candidate = None
+        try:
+            candidate = await client.inspect(sidecar, context.now)
+            aligned = abs(candidate.duration_seconds - asset.duration_seconds) <= Decimal("0.35")
+            if candidate.has_audio and not candidate.has_video and aligned:
+                return candidate, await client.materialize(candidate)
+        except MediaError:
+            pass
+        if candidate and candidate.file:
+            candidate.file.unlink(missing_ok=True)
+    return asset, await client.materialize(asset)
+
+
 @asynccontextmanager
 async def verified_audio(media: MediaPlan, context: RunContext):
     asset = media.audio
@@ -145,14 +163,14 @@ async def verified_audio(media: MediaPlan, context: RunContext):
     try:
         try:
             if context.media_client:
-                path = await context.media_client.materialize(asset)
+                inspected, path = await _speech_asset(media, context.media_client, context)
             else:
                 async with AsyncSession(impersonate="chrome", trust_env=False) as session:
-                    path = await MediaClient(session).materialize(asset)
+                    inspected, path = await _speech_asset(media, MediaClient(session), context)
             evidence = await asyncio.to_thread(analyze_pcm, await _decode_audio(path))
         except (MediaError, OSError, RuntimeError, TimeoutError, ValueError):
             evidence = SpeechEvidence("unknown")
-        yield evidence, replace(media, audio=replace(asset, file=path)) if path else media
+        yield evidence, replace(media, audio=replace(inspected, file=path)) if path else media
     finally:
         if path and path != asset.file:
             path.unlink(missing_ok=True)

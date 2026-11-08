@@ -120,6 +120,7 @@ class VideoRef:
     audio_url: str | None = None
     alternate_video_urls: tuple[str, ...] = ()
     caption_candidates: tuple[CaptionCandidate, ...] = ()
+    dash_audio_url: str | None = None
 
 
 @dataclass(frozen=True)

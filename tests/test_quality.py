@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from reelsaid.audio_quality import SpeechEvidence
+from reelsaid import audio_quality
+from reelsaid.audio_quality import SpeechEvidence, verified_audio
 from reelsaid.contracts import CaptionCandidate, Outcome, RunContext, TranscriptOptions, VideoMetadata, VideoRef
 from reelsaid.groq import LARGE, Segment, TranscriptDraft, Word
 from reelsaid.media import MediaAsset, MediaPlan
@@ -65,6 +66,43 @@ def test_music_silence_and_speech():
         draft((0, 9, "La voz se escucha sobre la música."), text="La voz se escucha sobre la música."),
     )
     assert spoken.value.billable and "música" in spoken.value.text
+
+
+def test_verification_uses_aligned_dash_track_and_rejects_unaligned_track(tmp_path, monkeypatch):
+    async def check():
+        sidecar = "https://media.cdninstagram.com/audio.m4a"
+        plan = media()
+        plan = replace(plan, ref=replace(plan.ref, dash_audio_url=sidecar))
+        seen = []
+
+        class Client:
+            duration = Decimal("10.1")
+
+            async def inspect(self, url, now):
+                assert url == sidecar
+                return MediaAsset(url, self.duration, True, False, 100)
+
+            async def materialize(self, asset):
+                seen.append(asset.url)
+                path = tmp_path / "asset"
+                path.write_bytes(b"fixture")
+                return path
+
+        async def decode(path):
+            return b"audio"
+
+        monkeypatch.setattr(audio_quality, "_decode_audio", decode)
+        monkeypatch.setattr(audio_quality, "analyze_pcm", lambda _: SpeechEvidence("speech"))
+        client = Client()
+        ctx = RunContext(None, None, datetime.now(UTC), lambda: False, media_client=client)
+        async with verified_audio(plan, ctx) as (evidence, inspected):
+            assert evidence.classification == "speech" and inspected.audio.url == sidecar
+        assert not list(tmp_path.iterdir())
+        client.duration = Decimal(4)
+        async with verified_audio(plan, ctx) as (_, inspected):
+            assert inspected.audio.url == URL
+        assert seen == [sidecar, URL]
+    asyncio.run(check())
 
 
 def test_captions_and_asr_provenance():

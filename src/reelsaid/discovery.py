@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from urllib.parse import urlsplit
+from xml.etree import ElementTree
 
 from apify_client.errors import ApifyApiError, ApifyClientError
 
@@ -80,6 +81,27 @@ def _audio_url(node: JsonObject) -> str | None:
     return _cdn(node.get("audio_url")) or _cdn(node.get("audioUrl")) or _cdn(original.get("audio_url"))
 
 
+def _dash_audio(node: JsonObject) -> str | None:
+    manifest = node.get("video_dash_manifest")
+    if not isinstance(manifest, str) or len(manifest) > 128 * 1024 or "<!DOCTYPE" in manifest:
+        return None
+    try:
+        root = ElementTree.fromstring(manifest)
+    except ElementTree.ParseError:
+        return None
+    candidates = []
+    for adaptation in root.findall(".//{*}AdaptationSet"):
+        for representation in adaptation.findall("./{*}Representation"):
+            mime = representation.get("mimeType") or adaptation.get("mimeType") or ""
+            if adaptation.get("contentType") != "audio" and not mime.startswith("audio/"):
+                continue
+            url = _cdn(representation.findtext("./{*}BaseURL"))
+            if url:
+                bitrate = representation.get("bandwidth", "")
+                candidates.append((int(bitrate) if bitrate.isascii() and bitrate.isdecimal() and len(bitrate) < 12 else 0, url))
+    return max(candidates, default=(0, None))[1]
+
+
 def _audio_metadata(node: JsonObject) -> JsonObject | None:
     clips = object_value(node.get("clips_metadata"))
     asset = object_value(object_value(clips.get("music_info")).get("music_asset_info"))
@@ -130,7 +152,8 @@ def videos_from_post(
         ))
         video_url = variants[0] if variants else _cdn(child.get("video_url"))
         audio_url = _audio_url(child)
-        if not video_url and not audio_url and child.get("media_type") != 2 and child.get("is_video") is not True:
+        dash_audio = _dash_audio(child)
+        if not video_url and not audio_url and not dash_audio and child.get("media_type") != 2 and child.get("is_video") is not True:
             continue
         child_id = _id(child.get("pk") or child.get("id"))
         identity = code if position is None else f"{code}:{child_id or position}"
@@ -152,7 +175,7 @@ def videos_from_post(
             comment_count=count("comment_count"),
             carousel_position=position,
             pinned=pinned,
-        ), (ref,), video_url, audio_url, variants[1:]))
+        ), (ref,), video_url, audio_url, variants[1:], dash_audio_url=dash_audio))
     return videos
 
 
@@ -164,6 +187,7 @@ def _merge(first: VideoRef, second: VideoRef) -> VideoRef:
         provenance=tuple(dict.fromkeys((*first.provenance, *second.provenance))),
         video_url=first.video_url or second.video_url,
         audio_url=first.audio_url or second.audio_url,
+        dash_audio_url=first.dash_audio_url or second.dash_audio_url,
         caption_candidates=tuple(dict.fromkeys((*first.caption_candidates, *second.caption_candidates))),
         metadata=replace(
             left,

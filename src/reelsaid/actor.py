@@ -119,6 +119,7 @@ def _decode_video(data: JsonObject) -> VideoRef:
         data["video_id"], VideoMetadata(**metadata), tuple(InputRef(**item) for item in data["provenance"]),
         data["video_url"], data["audio_url"], tuple(data["alternate_video_urls"]),
         tuple(CaptionCandidate(**item) for item in data["caption_candidates"]),
+        data.get("dash_audio_url"),
     )
 
 

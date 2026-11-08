@@ -96,6 +96,23 @@ def test_mixed_sources_converge():
     assert ig.requests == [EXAMPLE]
 
 
+def test_media_dash_audio_keeps_signed_url_and_excludes_video_and_other_hosts():
+    manifest = """<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period>
+        <AdaptationSet contentType="video"><Representation bandwidth="999999">
+            <BaseURL>https://test.cdninstagram.com/video.mp4</BaseURL>
+        </Representation></AdaptationSet>
+        <AdaptationSet mimeType="audio/mp4">
+            <Representation bandwidth="100000"><BaseURL>https://example.org/high.m4a</BaseURL></Representation>
+            <Representation bandwidth="32000"><BaseURL>https://test.cdninstagram.com/low.m4a</BaseURL></Representation>
+            <Representation bandwidth="64000"><BaseURL>https://test.cdninstagram.com/high.m4a?oh=abc&amp;oe=abc</BaseURL></Representation>
+        </AdaptationSet>
+    </Period></MPD>"""
+    result = resolve({"shortcodes": [EXAMPLE]}, FakeInstagram({EXAMPLE: post(EXAMPLE, video_dash_manifest=manifest)}))
+    video, = result.videos
+    assert video.dash_audio_url == "https://test.cdninstagram.com/high.m4a?oh=abc&oe=abc"
+    assert video.audio_url is None
+
+
 def test_profile_and_carousel():
     expected = CLOUD[f"post-graphql-{CAROUSEL}"]["targetChildChecks"]
     child_by_position = {row["position"]: row["id"] for row in expected}
