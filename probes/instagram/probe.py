@@ -88,6 +88,8 @@ def describe(response, target_code=None):
         "targetCdnProbe": media_probe,
         "listingAnchors": len(set(re.findall(r"/(?:reel|p)/([A-Za-z0-9_-]{8,16})/", text))),
         "profileNode": bool(keys & {"xig_user_by_username", "polaris_ordered_timeline_connection"}),
+        "profileHints": {k: bool(re.search(r'["\']' + k + r'["\']', text))
+                         for k in ("profile_id", "xig_user_by_username", "polaris_ordered_timeline_connection", "user_id")},
         "http": response.status_code,
         "bytes": len(response.content),
         "finalHost": urlparse(response.url).hostname,
@@ -96,7 +98,7 @@ def describe(response, target_code=None):
         "codes": sorted(codes)[:35],
         "hasCursor": bool(keys & {"end_cursor", "max_id", "next_max_id"}),
         "hasCarousel": bool(keys & {"carousel_media", "edge_sidecar_to_children"}),
-        "profile": {k: profile.get(k) for k in ("username", "is_private", "is_professional_account", "account_type")} if profile else None,
+        "profile": {k: profile.get(k) for k in ("username", "is_private", "is_professional_account", "account_type", "id", "pk")} if profile else None,
         "fields": sorted(keys & {"video_versions", "video_url", "video_duration", "play_count", "view_count",
                                 "like_count", "comment_count", "caption", "taken_at", "coauthor_producers",
                                 "clips_metadata", "xig_polaris_media", "polaris_ordered_timeline_connection",
@@ -105,7 +107,7 @@ def describe(response, target_code=None):
     }
 
 
-def graphql(session, referer, doc_id, friendly_name, variables, *, lsd=None):
+def graphql(session, referer, doc_id, friendly_name, variables, *, lsd=None, endpoint="/api/graphql"):
     headers = {**BASE_HEADERS, "Referer": referer, "X-FB-Friendly-Name": friendly_name,
                "X-Requested-With": "XMLHttpRequest"}
     data = {"doc_id": doc_id, "variables": json.dumps(variables, separators=(",", ":")),
@@ -116,7 +118,7 @@ def graphql(session, referer, doc_id, friendly_name, variables, *, lsd=None):
     csrf = session.cookies.get("csrftoken")
     if csrf:
         headers["X-CSRFToken"] = csrf
-    return session.post(f"{BASE}/api/graphql", data=data, headers=headers, timeout=8)
+    return session.post(f"{BASE}{endpoint}", data=data, headers=headers, timeout=8)
 
 
 def from_library(label, args):
@@ -188,13 +190,44 @@ def main():
             fetch(f"profile-posts-{name}", lambda: fresh.get(profile + "posts/", timeout=8))
         with requests.Session(impersonate="safari_ios", trust_env=False) as mobile:
             fetch(f"profile-mobile-{name}", lambda: mobile.get(profile, timeout=8))
-        fetch(f"profile-by-id-graphql-{name}", lambda: graphql(
+        profile_response = fetch(f"profile-by-id-graphql-{name}", lambda: graphql(
             session, profile, "27937681195819736", "PolarisProfilePageContentQuery",
             {"id": PROFILE_IDS[name], "render_surface": "PROFILE", "enable_integrity_filters": True,
              "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": True,
              "__relay_internal__pv__PolarisCASB976ProfileEnabledrelayprovider": False,
              "__relay_internal__pv__PolarisRepostsConsumptionEnabledrelayprovider": False,
              "__relay_internal__pv__PolarisWebSchoolsEnabledrelayprovider": False}, lsd=lsd))
+        user = {}
+        if profile_response is not None:
+            for value in json_values(profile_response.text):
+                user = next((node for node in walk(value) if node.get("username") == name
+                             and (node.get("id") or node.get("pk"))), {})
+                if user:
+                    break
+        keys = {str(user[k]) for k in ("id", "pk") if user.get(k)}
+        keys.add(PROFILE_IDS[name])
+        for index, identity in enumerate(sorted(keys)):
+            listing = fetch(f"logged-out-by-resolved-id-{name}-{index}", lambda: graphql(
+                session, profile, "28904005159232689", "PolarisLoggedOutDesktopWWWProfilePostsTabContentQuery_connection",
+                {"id": identity, "first": 12, "after": None, "before": None,
+                 "__relay_internal__pv__PolarisSEOIsCrawlerrelayprovider": False}, lsd=lsd))
+            if listing is not None:
+                for value in json_values(listing.text):
+                    if not isinstance(value, dict):
+                        continue
+                    emit({"route": f"listing-structure-{name}-{index}",
+                          "dataKeys": list((value.get("data") or {}).keys()),
+                          "nodeKeys": list(((value.get("data") or {}).get("node") or {}).keys())[:25],
+                          "graphError": [e.get("message", "")[:180] for e in value.get("errors") or []]})
+        fetch(f"reels-legacy-endpoint-{name}", lambda: graphql(
+            session, profile, "7845543455542541", "PolarisProfileReelsTabContentQuery_connection",
+            {"data": {"page_size": 12, "include_feed_video": True, "target_user_id": PROFILE_IDS[name]}},
+            lsd=lsd, endpoint="/graphql/query"))
+        fetch(f"legacy-topsearch-{name}", lambda: session.get(
+            BASE + "/web/search/topsearch/", params={"query": name, "context": "blended"},
+            headers=BASE_HEADERS, timeout=8))
+        fetch(f"profile-deeplink-{name}", lambda: session.get(
+            f"{BASE}/_u/{name}/", timeout=8))
         fetch(f"profile-posts-graphql-{name}", lambda: graphql(
             session, profile, "29104886249145907", "PolarisProfilePostsTabContentQuery_connection",
             {"data": {"count": 12, "include_reel_media_seen_timestamp": True,
