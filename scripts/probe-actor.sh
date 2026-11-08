@@ -49,6 +49,9 @@ run_actor cached "$(jq -c '.forceRefresh = false' <<<"$prefill")"
 jq -e 'length == 1 and .[0].status == "success" and .[0].cached == true and .[0].charged == false' "$workspace/cached-rows.json"
 run_actor budget "$prefill" '{"memory":512,"timeout":90,"waitForFinish":60,"maxTotalChargeUsd":0.011}'
 jq -e '.stopReason == "SPEND_LIMIT" and .continuation.remaining == 1 and .billed == 0' "$workspace/budget-summary.json"
+run_actor timed "$prefill" '{"memory":512,"timeout":10,"waitForFinish":40}'
+jq -e '.stopReason == "TIME_LIMIT" and .continuation.reason == "TIME_LIMIT" and
+    .successful == 0 and .billed == 0' "$workspace/timed-summary.json"
 
 run_actor mixed '{"shortcodes":["DS46KJNjva9","Ddm6E9OGt5D"],"startUrls":["https://example.org/invalid"],"forceRefresh":true}'
 jq -e 'any(.[]; .errorCode == "INVALID_URL") and any(.[]; .videoId == "DS46KJNjva9" and .status == "success") and
