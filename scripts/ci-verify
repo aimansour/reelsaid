@@ -41,6 +41,16 @@ case "$1" in
         ./scripts/verify package
         bash scripts/probe-package.sh
         ;;
+    release)
+        : "${PACKAGE_ROOT:?The public checkout is required}"
+        ensure_uv
+        ./scripts/verify release
+        ./scripts/verify package
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/release-actor.sh "${@:2}"
+        ;;
+    periodic)
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/release-actor.sh periodic
+        ;;
     fail)
         exit 1
         ;;
