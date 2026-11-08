@@ -46,13 +46,15 @@ async def main():
         peer = await wait_for_record(store, "holder" if role == "contender" else "contender")
         registration = await queue.add_request(request)
         existing = await queue.get_request(registration.request_id)
-        assert existing and existing.user_data["runId"] in {peer["runId"], run_id}
+        assert existing and existing.user_data
+        owner_id = existing.user_data.model_dump().get("runId")
+        assert owner_id in {peer["runId"], run_id}
         won = not registration.was_already_present
         if won:
-            assert existing.user_data["runId"] == run_id
+            assert owner_id == run_id
             await store.set_record("winner", {"runId": run_id})
         else:
-            assert existing.user_data["runId"] == peer["runId"]
+            assert owner_id == peer["runId"]
             await wait_for_record(store, "winner")
         run_api = None
         if not won:

@@ -154,18 +154,18 @@ The signatures below describe data and ownership across tasks. `TenantId`, `RunI
 
 **Consumes** · `VideoId` from known discovery identity or `MediaPlan`, authenticated `TenantId`, and run identity. **Produces** · `State` operations `lookup(tenantId, videoId, options) -> CacheLookup`, `acquire(videoId, runId) -> Outcome<Lease>`, `lookupAnswer(tenantId, watchlistId, videoId) -> AnswerState`, `recordAnswer(tenantId, watchlistId, videoId, outcome)`, `loadCheckpoint(tenantId, datasetId) -> Checkpoint`, and `saveCheckpoint(tenantId, datasetId, checkpoint)`. Bind guarded commit and release operations to the lease mechanism chosen here.
 
-- [ ] Compare viable storage and atomic lease mechanisms against cross-run locking, fencing, tenant access, failure recovery, and cost. Use a bounded concurrent Apify probe where the platform guarantees need verification. Record the chosen mechanism and which state transitions it can protect.
+- [ ] Measure Steadyfetch with overlapping cold runs, later repeats, and a fresh watchlist. Match observed coordination within the calling Apify account. Compare native storage and claims against account isolation, recovery, and cost. Verify required Apify guarantees with a bounded concurrent cloud probe.
 - [ ] Write these cases in the `state` suite.
 
   ```text
-  expired_lease_fences_owner: assert active_owners(video) == 1 and stale_publish_calls == stale_charge_calls == 0
+  finished_owner_allows_recovery: assert active_owners(account, video) == 1 and released_owner_cannot_commit
   tenant_isolation: assert other_account_has_no_cache_watchlist_or_checkpoint_access
   overlapping_refresh_coalesces: assert concurrent_refreshes_share_one_processing_attempt
   checkpoint_preserves_completed_work: assert resumed_work_contains_pending_items_and_prior_paid_refs
   ```
 
 - [ ] Run `./scripts/verify state`. Expect failures on the required state transitions.
-- [ ] Implement guarded leases, account cache and watchlist state, and durable checkpoint access. Store reusable successes by video and result-changing options. Persist terminal watchlist answers and preserve retryable work.
+- [ ] Implement native account-scoped claims, cache, watchlist state, and durable checkpoint access. Store reusable successes by video and result-changing options. Persist definitive account answers and preserve retryable work.
 - [ ] Run `./scripts/verify state`. Expect all cases to pass.
 - [ ] Review and commit the state evidence and implementation.
 

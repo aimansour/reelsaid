@@ -43,3 +43,17 @@ Keep signed source URLs and raw competitor records in the restricted storage. Th
 The category inventory and usage snapshot were checked with Apify CLI Store search and actor metadata. Live numbers describe this campaign, with repeat measurement reserved for decisions where run variance changes the result.
 
 Verified public automation runs `42410541359`, `42410794349`, `42410984893`, `42411108181`. Raw per-case run IDs and rows are in the restricted benchmark store.
+
+## Account memory and simultaneous requests
+
+On November 8, public workflow `42442648332` submitted two cold overlapping pairs to Steadyfetch. Each run requested one known public Reel and had a $0.05 spending cap. Apify confirmed the final event counts after all seven runs finished.
+
+| Case | Start difference | Delivered transcripts | Settled transcript events |
+| --- | ---: | ---: | ---: |
+| Cold pair without a watchlist | 4 ms | 2, including one uncharged repeat | 1 |
+| Sequential repeat without a watchlist | — | 1 uncharged repeat | 0 |
+| Cold pair with the same new watchlist and `newReelsOnly` | 5 ms | 2, including one uncharged repeat | 1 |
+| Later run with the same watchlist and `newReelsOnly` | — | 0, one seen item skipped | 0 |
+| Later run with a different new watchlist and `newReelsOnly` | — | 0, one seen item skipped | 0 |
+
+Each uncharged overlapping result named the paid run as its first-seen run. The pairs establish one billed transcript per video in the measured account. They reveal observable behavior without establishing Steadyfetch's internal coordination method. Total settled spend was $0.030. Match that account scope and the reuse behavior. [Steadyfetch watchlists](https://apify.com/steadyfetch/instagram-reel-transcript-scraper#watch-creators-on-a-schedule--pay-only-for-new-reels)
