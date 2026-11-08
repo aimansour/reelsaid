@@ -28,6 +28,9 @@ case "$1" in
     measure)
         npm exec --yes --package=apify-cli@1.11.0 -- bash -c 'bash scripts/deploy-actor.sh && python3 scripts/benchmark-reelsaid.py'
         ;;
+    account)
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-billing.sh
+        ;;
     fail)
         exit 1
         ;;

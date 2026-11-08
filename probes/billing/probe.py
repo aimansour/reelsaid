@@ -6,6 +6,17 @@ from apify import Actor
 from apify_client import ApifyClientAsync
 from apify_client.errors import ApifyApiError
 
+from reelsaid.billing import RunPricing
+
+
+async def observed_counts(run, event, count):
+    for _ in range(15):
+        details = await run.get()
+        counts = details.charged_event_counts or {}
+        if counts.get(event, 0) >= count:
+            return counts
+        await asyncio.sleep(0.2)
+    return counts
 
 async def main():
     async with Actor:
@@ -31,12 +42,18 @@ async def main():
             result["selfUserError"] = error.status_code
         if request.get("charge") is True:
             try:
+                settings = RunPricing.from_run(
+                    details, environ.get("APIFY_USER_PRICING_TIER"), settings["max_total_charge_usd"],
+                )
+                quote = settings.quote(241)
+                result["quote"] = {"total": str(quote.total), "admission": settings.budget.reserve(quote).status,
+                                   "chargesEnabled": settings.charges_enabled}
                 await run.charge("reel-transcript", idempotency_key="reelsaid-test-base", timeout="short")
-                result["first"] = (await run.get()).charged_event_counts
+                result["first"] = await observed_counts(run, "reel-transcript", 1)
                 await run.charge("reel-transcript", idempotency_key="reelsaid-test-base", timeout="short")
-                result["replayed"] = (await run.get()).charged_event_counts
+                result["replayed"] = await observed_counts(run, "reel-transcript", 1)
                 await run.charge("additional-minute", count=2, idempotency_key="reelsaid-test-minute", timeout="short")
-                result["final"] = (await run.get()).charged_event_counts
+                result["final"] = await observed_counts(run, "additional-minute", 2)
             except ApifyApiError as error:
                 result["chargeError"] = {"status": error.status_code, "type": error.type}
         await Actor.set_value("RESULT", result)

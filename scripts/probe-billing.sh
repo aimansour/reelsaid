@@ -4,7 +4,10 @@ cd -- "$(dirname "$0")/.."
 workspace=$(mktemp -d)
 trap 'rm -rf -- "$workspace"' EXIT
 actor=aimansour~reelsaid-billing-probe
-apify actors push --dir probes/billing --wait-for-finish 300 --json
+mkdir -p "$workspace/package/reelsaid"
+cp -R probes/billing/. "$workspace/package/"
+cp src/reelsaid/{billing,state,contracts}.py "$workspace/package/reelsaid/"
+apify actors push --dir "$workspace/package" --wait-for-finish 300 --json
 apify api GET "acts/$actor" >"$workspace/actor.json"
 jq -e '.data.isPublic == false' "$workspace/actor.json"
 if ! jq -e 'any(.data.pricingInfos[]?; .pricingModel == "PAY_PER_EVENT")' "$workspace/actor.json"; then
@@ -21,6 +24,7 @@ jq -e '.maxChargeRun == 0.018 and (.maxChargeEnv | tonumber) == 0.018 and
 if jq -e '.error.type == "cannot-monetize-without-payout-billing-info"' "$workspace/pricing.json" 2>/dev/null; then
     jq -e '.chargeError.type == "cannot-charge-non-pay-per-event-actor"' "$workspace/result.json"
 else
-    jq -e '.first["reel-transcript"] == 1 and .replayed["reel-transcript"] == 1 and
+    jq -e '(.quote.total | tonumber) == 0.018 and .quote.admission == "admitted" and .quote.chargesEnabled == true and
+        .first["reel-transcript"] == 1 and .replayed["reel-transcript"] == 1 and
         .final["reel-transcript"] == 1 and .final["additional-minute"] == 2' "$workspace/result.json"
 fi
