@@ -1,0 +1,9 @@
+{
+  "spoken": "shortSpoken from the fixture catalog, with its on-screen caption reference",
+  "sidecar": "Mono 16 kHz FLAC derived from the same original video",
+  "silent": {"kind": "zero_pcm", "durationSeconds": 9, "expected": "silence"},
+  "instrumental": {"kind": "three_tone_chord", "durationSeconds": 9, "expected": "music_only"},
+  "speechOverMusic": {"kind": "spoken_with_chord_bed", "expected": "speech"},
+  "languages": ["en", "es"],
+  "realNoSpeechCandidate": "Retain the source duration and assess its audio before assigning a ground-truth class."
+}
