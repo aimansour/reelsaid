@@ -12,6 +12,12 @@ on:
         required: true
         type: choice
         options: [pass, fail, run, cloud, measure, account, package, periodic, runner-health, compare]
+      comparison:
+        description: Comparison case group
+        required: false
+        type: choice
+        default: contract
+        options: [contract, single, batch, audio, input-a, input-b, standby]
 
 permissions:
   contents: read
@@ -37,6 +43,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ inputs.source_revision }}
           CHECK_MODE: ${{ inputs.check }}
+          COMPARISON_GROUP: ${{ inputs.comparison }}
           PERIODIC_SOURCE_REVISION: ${{ secrets.PERIODIC_SOURCE_REVISION }}
           SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
           SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
@@ -64,4 +71,4 @@ jobs:
             exit 1
           fi
           unset SOURCE_KEY SOURCE_REPOSITORY PERIODIC_SOURCE_REVISION
-          bash .github/scripts/verify.sh "$scratch" "$CHECK_MODE"
+          bash .github/scripts/verify.sh "$scratch" "$CHECK_MODE" "$COMPARISON_GROUP"
