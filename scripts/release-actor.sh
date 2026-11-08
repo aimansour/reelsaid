@@ -24,7 +24,7 @@ trap cleanup EXIT
 trap 'printf "Release operation failed at line %s.\n" "$LINENO" >&2' ERR
 
 get_actor() {
-    apify api GET "$actor" > "$scratch/actor.json"
+    apify api GET "$actor" > "$scratch/actor.json" || return
     jq -e '.data.isSourceCodeHidden == true and .data.actorPermissionLevel == "LIMITED_PERMISSIONS"' \
         "$scratch/actor.json" >/dev/null
 }
@@ -164,16 +164,29 @@ if [[ $mode == rehearse ]]; then
 fi
 
 if [[ $mode == publish ]]; then
-    jq -e 'any(.data.pricingInfos[]?; .pricingModel == "PAY_PER_EVENT" and
-        ((.startedAt | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) <= now))' "$scratch/actor.json" >/dev/null
-    previous_options=$(jq -c '{defaultRunOptions:.data.defaultRunOptions}' "$scratch/actor.json")
-    set_default "$build_number"
-    [[ $(default_build) == "$build_id" ]]
+    : "${RELEASE_PRICING_SHA256:?An approved effective price schedule is required}"
+    jq -ecS '[.data.pricingInfos[]? |
+        select((.startedAt | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) <= now)] |
+        max_by(.startedAt) | select(.pricingModel == "PAY_PER_EVENT")' \
+        "$scratch/actor.json" > "$scratch/pricing.json"
+    read -r pricing_digest _ < <(sha256sum "$scratch/pricing.json")
+    [[ $pricing_digest == "$RELEASE_PRICING_SHA256" ]]
     smoke "$build_id" false
-    jq -c '. + {isPublic:true,isSourceCodeHidden:true,exampleRunInput:null}' "$PACKAGE_ROOT/store/listing.json" |
-        apify api PUT "$actor" -d - > "$scratch/published.json"
-    jq -e '.data.isPublic and .data.isSourceCodeHidden' "$scratch/published.json" >/dev/null
-    previous_options=
+    jq -c --arg build "$build_number" --slurpfile actor "$scratch/actor.json" '
+        . + {isPublic:true,isSourceCodeHidden:true,exampleRunInput:null,
+        defaultRunOptions:($actor[0].data.defaultRunOptions | .build=$build)}' \
+        "$PACKAGE_ROOT/store/listing.json" > "$scratch/promotion.json"
+    for attempt in 1 2 3; do
+        apify api PUT "$actor" -d - < "$scratch/promotion.json" >/dev/null || true
+        if get_actor && jq -e --slurpfile approved "$scratch/promotion.json" '
+            .data as $actor | all($approved[0] | to_entries[]; $actor[.key] == .value)' \
+            "$scratch/actor.json" >/dev/null && [[ $(default_build) == "$build_id" ]]; then
+            printf '%s\n' 'Release operation verified.'
+            exit 0
+        fi
+        sleep "$attempt"
+    done
+    exit 1
 fi
 
 printf '%s\n' 'Release operation verified.'
