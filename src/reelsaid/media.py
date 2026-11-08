@@ -21,6 +21,7 @@ from .instagram import InstagramError
 
 
 PROBE_BYTES = 64 * 1024
+MAX_INDEX_BYTES = 512 * 1024
 LOCAL_MEDIA_FORMATS = "mov,mp3,aac,wav,flac,ogg,matroska,webm"
 REDIRECTS = {301, 302, 303, 307, 308}
 
@@ -56,7 +57,7 @@ class MediaPlan:
             path.unlink(missing_ok=True)
 
 
-def _mp4_boxes(data: bytes) -> Iterator[tuple[bytes, bytes]]:
+def _mp4_headers(data: bytes) -> Iterator[tuple[bytes, int, int]]:
     offset = 0
     while len(data) - offset >= 8:
         length = int.from_bytes(data[offset:offset + 4])
@@ -67,10 +68,23 @@ def _mp4_boxes(data: bytes) -> Iterator[tuple[bytes, bytes]]:
                 return
             length = int.from_bytes(data[offset + 8:offset + 16])
             header = 16
-        if length < header or offset + length > len(data):
+        if length < header:
             return
-        yield name, data[offset + header:offset + length]
+        yield name, offset + header, offset + length
         offset += length
+
+
+def _mp4_boxes(data: bytes) -> Iterator[tuple[bytes, bytes]]:
+    for name, start, end in _mp4_headers(data):
+        if end > len(data):
+            return
+        yield name, data[start:end]
+
+
+def _mp4_index_end(data: bytes) -> int | None:
+    if data[4:8] != b"ftyp":
+        return None
+    return next((end for name, _, end in _mp4_headers(data) if name == b"moov"), None)
 
 
 def _contains_complete_mp4_index(data: bytes) -> bool:
@@ -198,24 +212,32 @@ class MediaClient:
             raise
         return path, resolved, size
 
+    async def _prefix(self, url: str, now: datetime, limit: int) -> tuple[Path, str, int, bool]:
+        async with self._open(url, now, range_header=f"bytes=0-{limit - 1}") as (response, resolved):
+            expected = total = None
+            if response.status_code == 206:
+                match = re.fullmatch(r"bytes 0-(\d+)/(\d+)", response.headers.get("content-range", ""))
+                if not match:
+                    raise MediaError("INVALID_MEDIA_RESPONSE", retryable=True)
+                expected, total = int(match[1]) + 1, int(match[2])
+                if expected > min(total, limit):
+                    raise MediaError("INVALID_MEDIA_RESPONSE", retryable=True)
+            path, size = await self._spool(response, expected_size=expected)
+        total = size if total is None else total
+        return path, resolved, total, size == total
+
     async def inspect(self, url: str, now: datetime) -> MediaAsset:
         path = None
         keep = False
         try:
-            async with self._open(url, now, range_header=f"bytes=0-{PROBE_BYTES - 1}") as (response, resolved):
-                complete = response.status_code == 200
-                expected = None
-                if not complete:
-                    match = re.fullmatch(r"bytes 0-(\d+)/(\d+)", response.headers.get("content-range", ""))
-                    if not match:
-                        raise MediaError("INVALID_MEDIA_RESPONSE", retryable=True)
-                    expected = int(match[1]) + 1
-                    total = int(match[2])
-                    if expected > min(total, PROBE_BYTES):
-                        raise MediaError("INVALID_MEDIA_RESPONSE", retryable=True)
-                    complete = expected == total
-                path, size = await self._spool(response, expected_size=expected)
-            if not complete and _contains_complete_mp4_index(path.read_bytes()):
+            path, resolved, total, complete = await self._prefix(url, now, PROBE_BYTES)
+            index = path.read_bytes() if not complete else b""
+            index_end = _mp4_index_end(index)
+            if index_end is not None and len(index) < index_end <= min(total, MAX_INDEX_BYTES):
+                path.unlink()
+                path, resolved, total, complete = await self._prefix(resolved, now, index_end)
+                index = path.read_bytes() if not complete else b""
+            if not complete and _contains_complete_mp4_index(index):
                 try:
                     duration, audio, video = await _probe(path)
                     return MediaAsset(resolved, duration, audio, video, total)
@@ -223,10 +245,10 @@ class MediaClient:
                     pass
             if not complete:
                 path.unlink(missing_ok=True)
-                path, resolved, size = await self._download(resolved, now)
+                path, resolved, total = await self._download(resolved, now)
             duration, audio, video = await _probe(path)
             keep = True
-            return MediaAsset(resolved, duration, audio, video, size, path)
+            return MediaAsset(resolved, duration, audio, video, total, path)
         except OSError as error:
             raise MediaError("MEDIA_INSPECTION_FAILED", retryable=True) from error
         finally:

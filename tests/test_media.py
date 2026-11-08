@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from reelsaid import media as media_module
 from reelsaid.contracts import InputRef, RunContext, VideoMetadata, VideoRef
 from reelsaid.discovery import discover
 from reelsaid.input import parse_input
@@ -116,6 +117,16 @@ def test_signed_url_preserved_and_expiry_is_explicit_without_origin(tmp_path):
     assert outcome.status == "failed"
     assert outcome.error_code == "MEDIA_URL_EXPIRED"
     assert outcome.retryable
+
+
+def test_large_fast_start_index_extends_range_without_downloading_video(samples, tmp_path, monkeypatch):
+    monkeypatch.setattr(media_module, "PROBE_BYTES", 128)
+    session = Session({VIDEO: samples[0]})
+    result = asyncio.run(inspect_media(ref(VIDEO), context(session, tmp_path=tmp_path)))
+    assert result.value.duration_seconds == Decimal(4)
+    assert result.value.video.file is None
+    assert len(session.requests) == 2 and all(header for _, header in session.requests)
+    assert not list(tmp_path.iterdir())
 
 
 def test_stable_cdn_identity():
