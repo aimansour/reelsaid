@@ -112,10 +112,14 @@ def free_receipt() -> ChargeReceipt:
 
 
 class RunBudget:
-    def __init__(self, cap: Decimal | None, *, spent: Decimal = ZERO):
+    def __init__(
+        self, cap: Decimal | None, *, spent: Decimal = ZERO, confirmed_events: dict[str, int] | None = None,
+        blocked: bool = False,
+    ):
         self.cap = None if cap is None else money(cap)
         self.spent = money(spent)
-        self.blocked = False
+        self.blocked = blocked
+        self.confirmed_events = dict(confirmed_events or {})
         self.settlement_lock = asyncio.Lock()
         self._active: dict[str, Reservation] = {}
 
@@ -133,10 +137,22 @@ class RunBudget:
         if self._active.get(reservation.id) != reservation:
             raise BillingError("Settlement requires an active run reservation")
 
-    def complete(self, reservation: Reservation, receipt: ChargeReceipt) -> ChargeReceipt:
+    def reconcile(self, totals: dict[str, int], cost: ChargeQuote) -> None:
+        increments = {}
+        for event, count in totals.items():
+            previous = self.confirmed_events.get(event, 0)
+            if count > previous:
+                self.confirmed_events[event] = count
+                increments[event] = count - previous
+        self.spent += cost.amount_for(increments)
+
+    def complete(self, reservation: Reservation, receipt: ChargeReceipt, *, totals: dict[str, int] | None = None) -> ChargeReceipt:
         self.require(reservation)
         del self._active[reservation.id]
-        self.spent += receipt.confirmed_usd
+        if totals is None:
+            self.spent += receipt.confirmed_usd
+        else:
+            self.reconcile(totals, reservation.quote)
         if receipt.state in {"unknown", "incomplete"}:
             self.blocked = True
         return receipt
@@ -156,7 +172,7 @@ class RunPricing:
         return quote(duration_seconds, "effective", base_prices={"effective": self.base}, minute_price=self.minute)
 
     @classmethod
-    def from_run(cls, run, tier: str | None, cap_environment: Decimal | str | None) -> "RunPricing":
+    def from_run(cls, run, tier: str | None, cap_environment: Decimal | str | None, journal: dict | None = None) -> "RunPricing":
         caps = [money(value) for value in (run.options.max_total_charge_usd, cap_environment) if value is not None]
         cap = min(caps) if caps else None
         pricing = run.pricing_info
@@ -181,9 +197,13 @@ class RunPricing:
             return money(entry.tiered_event_price_usd)
 
         base, minute = price(BASE_EVENT), price(MINUTE_EVENT)
-        counts = run.charged_event_counts or {}
+        journal = journal or {}
+        counts = dict(run.charged_event_counts or {})
+        for event, count in journal.get("events", {}).items():
+            counts[event] = max(count, counts.get(event, 0))
         spent = base * counts.get(BASE_EVENT, 0) + minute * counts.get(MINUTE_EVENT, 0)
-        return cls(RunBudget(cap, spent=spent), base, minute, True)
+        return cls(RunBudget(cap, spent=spent, confirmed_events=counts, blocked=bool(journal.get("pendingClaimId"))),
+                   base, minute, True)
 
 
 class ChargeProvider(Protocol):
@@ -239,14 +259,19 @@ class Settlement:
                     "quote": reservation.quote.record(),
                     "cap": str(self._budget.cap) if self._budget.cap is not None else None,
                     "confirmed": {},
+                    "confirmedTotals": {},
                     "pending": None,
                     "finished": False,
                 }
                 await self._state.save_settlement(lease, lease.claim_id, record)
             elif ChargeQuote.from_record(record["quote"]) != reservation.quote:
                 raise BillingError("The original authorized price must be preserved")
+            await self._state.save_run_billing(lease, {
+                "events": self._budget.confirmed_events, "pendingClaimId": lease.claim_id,
+            })
             receipt = await self._advance(lease, lease.claim_id, record, allow_new=True)
-            return self._budget.complete(reservation, receipt)
+            totals = await self._save_floor(lease, lease.claim_id, record)
+            return self._budget.complete(reservation, receipt, totals=totals)
 
     async def recover(self, lease: Lease) -> ChargeReceipt | None:
         async with self._budget.settlement_lock:
@@ -259,10 +284,22 @@ class Settlement:
                 return free_receipt()
             if staged["runId"] == lease.run_id and self._provider is not None:
                 receipt = await self._advance(lease, claim_id, record, allow_new=False)
-                if receipt.state in {"unknown", "incomplete"}:
-                    self._budget.blocked = True
+                run_journal = await self._state.load_run_billing()
+                if run_journal and run_journal["pendingClaimId"] == claim_id:
+                    totals = await self._save_floor(lease, claim_id, record)
+                    self._budget.reconcile(totals, ChargeQuote.from_record(record["quote"]))
+                    self._budget.blocked = receipt.state in {"unknown", "incomplete"}
                 return receipt
             return self._receipt(record)
+
+    async def _save_floor(self, lease: Lease, claim_id: str, record: dict) -> dict[str, int]:
+        totals = dict(self._budget.confirmed_events)
+        for event, count in record.get("confirmedTotals", {}).items():
+            totals[event] = max(count, totals.get(event, 0))
+        await self._state.save_run_billing(lease, {
+            "events": totals, "pendingClaimId": claim_id if record["pending"] is not None else None,
+        })
+        return totals
 
     async def _advance(self, lease: Lease, claim_id: str, record: dict, *, allow_new: bool) -> ChargeReceipt:
         if record["finished"]:
@@ -278,7 +315,8 @@ class Settlement:
                 counts = await self._provider.counts()
                 if counts is None:
                     break
-                pending = {"event": event, "before": counts.get(event, 0), "started": self._clock()}
+                floor = max(counts.get(event, 0), self._budget.confirmed_events.get(event, 0))
+                pending = {"event": event, "before": floor, "started": self._clock()}
                 record["pending"] = pending
                 await self._state.save_settlement(lease, claim_id, record)
             if pending["event"] != event:
@@ -287,6 +325,7 @@ class Settlement:
             if accepted is None:
                 return self._receipt(record)
             record["confirmed"][event] = accepted
+            record.setdefault("confirmedTotals", {})[event] = pending["before"] + accepted
             record["pending"] = None
             await self._state.save_settlement(lease, claim_id, record)
             if accepted != count:
@@ -300,8 +339,8 @@ class Settlement:
             counts = await self._provider.counts()
             if counts is not None:
                 difference = counts.get(event, 0) - pending["before"]
-                if difference:
-                    return difference if 0 < difference <= count else None
+                if difference > 0:
+                    return difference if difference <= count else None
             if attempt == 2 or not 0 <= self._clock() - pending["started"] < RETRY_WINDOW:
                 break
             if not await self._state.renew(lease):

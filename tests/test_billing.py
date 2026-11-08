@@ -120,6 +120,11 @@ def test_live_run_pricing_snapshot_omits_the_platform_usage_switch():
                           charged_event_counts={BASE_EVENT: 0, MINUTE_EVENT: 0})
     settings = RunPricing.from_run(run, "FREE", "0.018")
     assert settings.charges_enabled and settings.quote(241).total == Decimal("0.018")
+    resumed = RunPricing.from_run(
+        run, "FREE", "0.018", {"events": {BASE_EVENT: 1}, "pendingClaimId": "pending"},
+    )
+    assert resumed.budget.spent == Decimal("0.012") and resumed.budget.blocked
+    assert resumed.budget.reserve(resumed.quote(9)).status == "deferred"
 
 
 def test_settlement_response_lost():
@@ -208,5 +213,35 @@ def test_lagging_counter_retries_only_with_the_original_key():
         assert (await settlement.settle(lease, reservation)).state == "settled"
         assert len(provider.calls) == 2 and provider.calls[0] == provider.calls[1]
         assert provider.events == {BASE_EVENT: 1}
+
+    asyncio.run(check())
+
+
+def test_previous_acknowledgement_cannot_confirm_a_later_charge():
+    class DelayedProvider(Provider):
+        def __init__(self):
+            super().__init__()
+            self.reads = 0
+
+        async def counts(self):
+            self.reads += 1
+            return {} if self.reads < 4 else dict(self.events)
+
+    async def check():
+        account = FakeAccount("account")
+        state = account.state("original")
+        provider = DelayedProvider()
+        budget = RunBudget(Decimal("0.024"))
+        settlement = Settlement(state, provider, budget)
+        for video_id in ("first", "second"):
+            lease = (await state.acquire(video_id, state.run_id)).value
+            assert await state.stage(lease, OPTIONS, {"transcript": "durable"})
+            reservation = budget.reserve(quote(8, "FREE")).reservation
+            assert (await settlement.settle(lease, reservation)).state == "settled"
+            assert await state.release(lease)
+        assert provider.events == {BASE_EVENT: 2}
+        assert len(provider.calls) == 2 and budget.spent == Decimal("0.024")
+        saved = await state.load_run_billing()
+        assert saved == {"events": {BASE_EVENT: 2}, "pendingClaimId": None}
 
     asyncio.run(check())

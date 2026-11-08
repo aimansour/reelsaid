@@ -296,6 +296,17 @@ class State:
                 raise StateUnavailable("Billing ownership was lost")
             await self._set(_key("settlement", lease.video_id, claim_id), record)
 
+    async def load_run_billing(self) -> JsonObject | None:
+        return await self._get(_key("run-billing", self.run_id))
+
+    async def save_run_billing(self, lease: Lease, record: JsonObject) -> None:
+        if not self._owns(lease):
+            raise StateUnavailable("Billing ownership was lost")
+        async with self._guards[lease.slot]:
+            if not await self._renew_active(lease):
+                raise StateUnavailable("Billing ownership was lost")
+            await self._set(_key("run-billing", self.run_id), record)
+
     async def commit(
         self, lease: Lease, options: TranscriptOptions, status: Status, payload: JsonObject, *, recovered_claim: str | None = None,
     ) -> bool:

@@ -6,7 +6,9 @@ from apify import Actor
 from apify_client import ApifyClientAsync
 from apify_client.errors import ApifyApiError
 
-from reelsaid.billing import RunPricing
+from reelsaid.billing import ApifyCharges, RunPricing, Settlement
+from reelsaid.contracts import TranscriptOptions
+from reelsaid.state import State
 
 
 async def observed_counts(run, event, count):
@@ -17,6 +19,37 @@ async def observed_counts(run, event, count):
             return counts
         await asyncio.sleep(0.2)
     return counts
+
+async def settle_real_events(client, env, details, pricing):
+    class LostResponse(ApifyCharges):
+        def __init__(self, run):
+            super().__init__(run)
+            self.calls = []
+
+        async def charge(self, event, count, key):
+            acknowledged = await super().charge(event, count, key)
+            self.calls.append(key)
+            return acknowledged and len(self.calls) != 2
+
+    state = await State.open(client, env["user_id"], env["run_id"], namespace="reelsaid-account-qa")
+    provider = LostResponse(client.run(details.id))
+    settlement = Settlement(state, provider, pricing.budget)
+    confirmed = []
+    for number in range(2):
+        video = f"{details.id}-test-{number}"
+        lease = (await state.acquire(video, state.run_id)).value
+        assert lease and await state.stage(lease, TranscriptOptions(), {"transcript": "Billing verification fixture."})
+        reservation = pricing.budget.reserve(pricing.quote(8)).reservation
+        assert reservation
+        receipt = await settlement.settle(lease, reservation)
+        confirmed.append({"state": receipt.state, "amount": str(receipt.confirmed_usd), "events": receipt.events})
+        await state.release(lease)
+    return {
+        "receipts": confirmed,
+        "distinctKeys": len(set(provider.calls)),
+        "journal": await state.load_run_billing(),
+    }
+
 
 async def main():
     async with Actor:
@@ -40,7 +73,12 @@ async def main():
             result["selfUserPlan"] = json.loads(user.model_dump_json()).get("plan")
         except ApifyApiError as error:
             result["selfUserError"] = error.status_code
-        if request.get("charge") is True:
+        if request.get("settle") is True:
+            pricing = RunPricing.from_run(
+                details, environ.get("APIFY_USER_PRICING_TIER"), settings["max_total_charge_usd"],
+            )
+            result.update(await settle_real_events(client, settings, details, pricing))
+        elif request.get("charge") is True:
             try:
                 settings = RunPricing.from_run(
                     details, environ.get("APIFY_USER_PRICING_TIER"), settings["max_total_charge_usd"],
@@ -48,11 +86,12 @@ async def main():
                 quote = settings.quote(241)
                 result["quote"] = {"total": str(quote.total), "admission": settings.budget.reserve(quote).status,
                                    "chargesEnabled": settings.charges_enabled}
-                await run.charge("reel-transcript", idempotency_key="reelsaid-test-base", timeout="short")
+                base_key = f"reelsaid-test-base-{details.id}"
+                await run.charge("reel-transcript", idempotency_key=base_key, timeout="short")
                 result["first"] = await observed_counts(run, "reel-transcript", 1)
-                await run.charge("reel-transcript", idempotency_key="reelsaid-test-base", timeout="short")
+                await run.charge("reel-transcript", idempotency_key=base_key, timeout="short")
                 result["replayed"] = await observed_counts(run, "reel-transcript", 1)
-                await run.charge("additional-minute", count=2, idempotency_key="reelsaid-test-minute", timeout="short")
+                await run.charge("additional-minute", count=2, idempotency_key=f"reelsaid-test-minute-{details.id}", timeout="short")
                 result["final"] = await observed_counts(run, "additional-minute", 2)
             except ApifyApiError as error:
                 result["chargeError"] = {"status": error.status_code, "type": error.type}

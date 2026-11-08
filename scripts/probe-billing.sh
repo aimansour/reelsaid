@@ -25,6 +25,25 @@ if jq -e '.error.type == "cannot-monetize-without-payout-billing-info"' "$worksp
     jq -e '.chargeError.type == "cannot-charge-non-pay-per-event-actor"' "$workspace/result.json"
 else
     jq -e '(.quote.total | tonumber) == 0.018 and .quote.admission == "admitted" and .quote.chargesEnabled == true and
-        .first["reel-transcript"] == 1 and .replayed["reel-transcript"] == 1 and
-        .final["reel-transcript"] == 1 and .final["additional-minute"] == 2' "$workspace/result.json"
+        .chargeError == null' "$workspace/result.json"
+    id=$(jq -er .data.id "$workspace/run.json")
+    settled() {
+        local run_id=$1 expected=$2
+        for _ in {1..12}; do
+            apify api GET "actor-runs/$run_id" >"$workspace/settled.json"
+            if jq -e --argjson expected "$expected" '.data.chargedEventCounts == $expected' "$workspace/settled.json"; then
+                return 0
+            fi
+            sleep 2
+        done
+        return 1
+    }
+    settled "$id" '{"reel-transcript":1,"additional-minute":2}'
+    apify api POST "acts/$actor/runs" -p '{"maxTotalChargeUsd":0.024,"memory":256,"timeout":45,"waitForFinish":45}' \
+        -d '{"settle":true}' >"$workspace/production-run.json"
+    store=$(jq -er 'select(.data.status == "SUCCEEDED") | .data.defaultKeyValueStoreId' "$workspace/production-run.json")
+    apify api GET "key-value-stores/$store/records/RESULT" |
+        jq -e '.distinctKeys == 2 and .journal.pendingClaimId == null and .journal.events["reel-transcript"] == 2 and
+            (.receipts | length == 2 and all(.state == "settled" and (.amount|tonumber) == 0.012))'
+    settled "$(jq -er .data.id "$workspace/production-run.json")" '{"reel-transcript":2,"additional-minute":0}'
 fi

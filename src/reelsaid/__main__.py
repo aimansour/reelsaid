@@ -69,7 +69,9 @@ async def main() -> None:
                 )
                 if details is None:
                     raise BillingError("Run pricing is unavailable")
-                pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"])
+                is_ppe = details.pricing_info is not None and details.pricing_info.pricing_model == "PAY_PER_EVENT"
+                journal = await state.load_run_billing() if is_ppe else None
+                pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"], journal)
                 provider = ApifyCharges(scoped_run) if pricing.charges_enabled else None
                 memory = details.options.memory_mbytes
                 concurrency = 4 if memory >= 512 else 2 if memory >= 256 else 1
