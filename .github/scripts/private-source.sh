@@ -4,7 +4,7 @@ set -euo pipefail
 scratch=$1
 revision=$2
 selection=${3:-head}
-[[ -n $SOURCE_KEY && -n $APIFY_TOKEN ]]
+[[ -n $SOURCE_KEY ]]
 [[ $SOURCE_REPOSITORY =~ ^git@github\.com:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$ ]]
 [[ -z $revision || $revision =~ ^[0-9a-f]{40}$ ]]
 umask 077

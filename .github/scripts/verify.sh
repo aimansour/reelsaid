@@ -6,6 +6,10 @@ private_source=$1
 shift
 if (
     cd -- "$private_source"
+    if [[ $1 == runner-health ]]; then
+        exec env -i HOME="$HOME" PATH="$PATH" REELSAID_GROQ_KEYS="${REELSAID_GROQ_KEYS:-}" \
+            bash scripts/ci-verify "$@"
+    fi
     exec env -i HOME="$HOME" PATH="$PATH" APIFY_TOKEN="${APIFY_TOKEN:-}" \
         PACKAGE_ROOT="$package_root" RELEASE_PRICING_SHA256="${RELEASE_PRICING_SHA256:-}" \
         bash scripts/ci-verify "$@"

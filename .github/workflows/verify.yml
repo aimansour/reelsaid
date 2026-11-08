@@ -13,7 +13,7 @@ on:
         description: Verification to run
         required: true
         type: choice
-        options: [pass, fail, run, cloud, measure, account, package, periodic]
+        options: [pass, fail, run, cloud, measure, account, package, periodic, runner-health]
 
 permissions:
   contents: read
@@ -42,7 +42,8 @@ jobs:
           PERIODIC_SOURCE_REVISION: ${{ secrets.PERIODIC_SOURCE_REVISION }}
           SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
           SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_TOKEN: ${{ inputs.check != 'runner-health' && secrets.APIFY_TOKEN || '' }}
+          REELSAID_GROQ_KEYS: ${{ inputs.check == 'runner-health' && secrets.RUNNER_GROQ_KEYS || '' }}
         shell: bash
         run: |
           scratch=$(mktemp -d)
