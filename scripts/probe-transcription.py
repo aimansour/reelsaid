@@ -12,4 +12,4 @@ with tempfile.TemporaryDirectory(prefix="reelsaid-asr-probe-") as directory:
     subprocess.run(["apify", "actors", "push", "--dir", str(target), "--no-apply-env-vars-to-build",
                     "--wait-for-finish", "420", "--json"], check=True)
     subprocess.run(["apify", "actors", "call", "aimansour/reelsaid-transcription-probe",
-                    "--input", "{}", "--timeout", "340", "--memory", "1024", "--silent", "--json"], check=True)
+                    "--input", '{"mode":"expiry"}', "--timeout", "340", "--memory", "1024", "--silent", "--json"], check=True)
