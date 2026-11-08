@@ -1,8 +1,11 @@
 import asyncio
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+
+from apify_client.errors import ApifyClientError
 
 from reelsaid.actor import ActorContext, run
 from reelsaid.billing import PROPOSED_BASE, PROPOSED_MINUTE, RunBudget, RunPricing
@@ -223,4 +226,31 @@ def test_duration_and_time_stops():
         result = await run({"shortcodes": [SHORT], "maxDurationSeconds": 180, "forceRefresh": True}, single)
         assert result.skipped == 1 and not case.asr_calls
         assert single.output.rows[0]["errorCode"] == "DURATION_LIMIT"
+    asyncio.run(check())
+
+
+def test_dataset_response_loss_does_not_repeat_billing_or_paid_rows():
+    class InterruptedOutput(Output):
+        async def push(self, row):
+            await super().push(row)
+            if row["kind"] == "video":
+                raise ApifyClientError("Response unavailable after dataset write")
+
+    async def check():
+        case = Case()
+        first = case.context("first", output=InterruptedOutput("first"))
+        paused = await run({"shortcodes": [SHORT, NEXT]}, first)
+        assert paused.stop_reason == "DELIVERY_INTERRUPTED"
+        assert len(first.provider.calls) == 1 and len(first.output.rows) == 1
+
+        async def read_previous(dataset_id):
+            assert dataset_id == "first"
+            return await first.output.existing()
+
+        resumed = replace(case.context("later"), read_previous=read_previous)
+        done = await run({"resumeFromDatasetId": "first"}, resumed)
+        assert done.completed_dataset_ids == ("first",)
+        assert [row["videoId"] for row in resumed.output.rows] == [NEXT]
+        assert case.asr_calls == [SHORT, NEXT]
+        assert len(resumed.provider.calls) == 1
     asyncio.run(check())

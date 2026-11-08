@@ -2,8 +2,15 @@
 set -euo pipefail
 cd -- "$(dirname "$0")/.."
 workspace=$(mktemp -d)
-trap 'rm -rf -- "$workspace"' EXIT
 actor=aimansour~reelsaid
+task=
+schedule=
+cleanup() {
+    if [[ -n $schedule ]]; then apify api DELETE "schedules/$schedule" >/dev/null 2>&1 || true; fi
+    if [[ -n $task ]]; then apify api DELETE "actor-tasks/$task" >/dev/null 2>&1 || true; fi
+    rm -rf -- "$workspace"
+}
+trap cleanup EXIT
 
 mkdir -p "$workspace/package/scripts"
 cp -R .actor src Dockerfile .dockerignore pyproject.toml uv.lock "$workspace/package/"
@@ -53,3 +60,25 @@ jq -e '.successful == 1 and .continuation.remaining == 1 and .stopReason == "RES
 run_actor resumed "$(jq -cn --arg dataset "$dataset" '{resumeFromDatasetId:$dataset}')"
 jq -e --arg dataset "$dataset" '.successful == 1 and .continuation == null and .completedDatasetIds == [$dataset]' "$workspace/resumed-summary.json"
 jq -e -s '.[0][0].videoId != .[1][0].videoId' "$workspace/batch-rows.json" "$workspace/resumed-rows.json"
+
+actor_id=$(jq -er .data.id "$workspace/actor.json")
+test_name="reelsaid-verify-${GITHUB_RUN_ID:-$(date +%s)}"
+task=$(jq -cn --arg id "$actor_id" --arg name "$test_name" '{
+    actId:$id, name:$name, options:{build:"latest",memoryMbytes:512,timeoutSecs:80},
+    input:{shortcodes:["DS46KJNjva9"], watchlistId:$name, newReelsOnly:true}
+}' | apify api POST actor-tasks -d - | jq -er .data.id)
+schedule=$(jq -cn --arg task "$task" --arg name "$test_name" '{
+    name:$name, isEnabled:false, cronExpression:"0 4 * * *", timezone:"UTC",
+    actions:[{type:"RUN_ACTOR_TASK", actorTaskId:$task}]
+}' | apify api POST schedules -d - | jq -er .data.id)
+apify api POST "schedules/$schedule/invoke" -d '{}' >"$workspace/invoked.json"
+for _ in {1..20}; do
+    apify api GET "actor-tasks/$task/runs" -p '{"limit":1,"desc":true}' >"$workspace/scheduled-run.json"
+    scheduled_status=$(jq -r '.data.items[0].status // ""' "$workspace/scheduled-run.json")
+    if [[ $scheduled_status == SUCCEEDED ]]; then break; fi
+    if [[ $scheduled_status =~ ^(FAILED|TIMED-OUT|ABORTED)$ ]]; then exit 1; fi
+    sleep 2
+done
+scheduled_dataset=$(jq -er '.data.items[0] | select(.status == "SUCCEEDED" and .meta.origin == "SCHEDULER") | .defaultDatasetId' "$workspace/scheduled-run.json")
+apify datasets get-items "$scheduled_dataset" --format json |
+    jq -e 'length == 1 and .[0].errorCode == "ALREADY_ANSWERED" and .[0].charged == false and .[0].firstSeenRunId != null'

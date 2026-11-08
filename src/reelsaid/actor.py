@@ -129,7 +129,7 @@ class _Run:
         saved = await self.state.load_checkpoint(self.state.tenant_id, target)
         if not saved:
             if resume_id:
-                await self._input_row(Outcome("failed", "CHECKPOINT_NOT_FOUND", input_ref=InputRef("resumeFromDatasetId")))
+                await self._input_row(Outcome("failed", "RESUME_UNAVAILABLE", input_ref=InputRef("resumeFromDatasetId")))
                 return False
             return True
         self.raw = saved.filters["input"]
@@ -218,8 +218,18 @@ class _Run:
             Outcome(row["status"], row["errorCode"], row["retryable"]), seen_at=when,
         )
 
+    async def _deliver(self, row: JsonObject) -> JsonObject:
+        if row["errorCode"] in {"SPEND_LIMIT", "TIME_LIMIT", "BILLING_UNRESOLVED"}:
+            return row
+        await self._push(row)
+        if _definitive(row):
+            seen = datetime.fromisoformat(row["firstSeenAt"]) if row["firstSeenAt"] else None
+            await self._record_answer(row, seen)
+        return row
+
     async def _render(
-        self, ref: VideoRef, payload: JsonObject, receipt: ChargeReceipt, answer: AnswerState, *, cached: bool = False,
+        self, ref: VideoRef, payload: JsonObject, receipt: ChargeReceipt, answer: AnswerState, *,
+        cached: bool = False, billing_origin: str | None = None,
     ) -> JsonObject:
         row = dict(payload["row"])
         current = to_row(ref, Outcome(row["status"]), BillingFields())
@@ -239,7 +249,7 @@ class _Run:
         row.update(
             metadata=metadata, provenance=current["provenance"], subtitles=links, cached=cached,
             charged=receipt.charged, billedMinutes=receipt.billed_minutes, chargedEvents=receipt.events,
-            confirmedChargeUsd=float(receipt.confirmed_usd),
+            confirmedChargeUsd=float(receipt.confirmed_usd), billingStatus=receipt.state, billingOriginRunId=billing_origin,
         )
         if self.options.watchlist_id or self.options.new_reels_only:
             if answer.answered:
@@ -258,28 +268,35 @@ class _Run:
         state, options = self.state, self.options.transcript
         answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
         if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
-            self.previous += 1
-            return to_row(ref, Outcome("skipped", "ALREADY_ANSWERED"), BillingFields(), is_new=False,
-                          first_seen_at=answer.first_seen_at, first_seen_run_id=answer.first_seen_run_id)
+            return await self._skip_answered(ref, answer)
         baseline = await state.lookup(state.tenant_id, ref.video_id, options)
-        if baseline.reusable and not self.options.force_refresh and baseline.successful.payload.get("runId") != state.run_id:
-            return await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True)
+        reusable = baseline.reusable and not self.options.force_refresh and baseline.successful.payload.get("runId") != state.run_id
+        if reusable and answer.answered:
+            return await self._deliver(await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True))
         wait_until = monotonic() + self.context.claim_wait_seconds
         while True:
             claim = await state.acquire(ref.video_id, state.run_id, options=options, baseline=baseline)
             if claim.error_code == "RESULT_AVAILABLE":
+                answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
+                if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
+                    return await self._skip_answered(ref, answer)
                 result = (await state.lookup(state.tenant_id, ref.video_id, options)).result
-                return await self._render(ref, result.payload, free_receipt(), answer, cached=result.status == "success")
+                return await self._deliver(await self._render(ref, result.payload, free_receipt(), answer, cached=result.status == "success"))
             if claim.value or monotonic() >= wait_until or self.context.expired():
                 break
             await asyncio.sleep(0.1)
         if not claim.value:
-            return to_row(ref, claim, BillingFields())
+            return await self._deliver(to_row(ref, claim, BillingFields()))
         lease = claim.value
         heartbeat = asyncio.create_task(self._heartbeat(lease))
         actual = None
         owns_media = media is None
         try:
+            answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
+            if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
+                return await self._skip_answered(ref, answer)
+            if reusable:
+                return await self._deliver(await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True))
             settlement = Settlement(state, self.context.provider, self.context.pricing.budget, options=options)
             staged = await state.load_stage(lease, options)
             if staged and (staged["claimId"] != baseline.revision or staged["runId"] == state.run_id):
@@ -287,9 +304,10 @@ class _Run:
                 payload = staged["payload"]
                 if not await state.commit(lease, options, payload["row"]["status"], payload, recovered_claim=staged["claimId"]):
                     raise StateUnavailable("Recovered result ownership was lost")
-                if staged["runId"] != state.run_id and receipt.charged is not None:
+                origin = staged["runId"] if staged["runId"] != state.run_id else None
+                if origin and receipt.charged is not None:
                     receipt = free_receipt()
-                return await self._render(ref, payload, receipt, answer)
+                return await self._deliver(await self._render(ref, payload, receipt, answer, billing_origin=origin))
             if media is None:
                 try:
                     async with asyncio.timeout(self.context.remaining_seconds()):
@@ -298,10 +316,10 @@ class _Run:
                     inspected = Outcome("deferred", "TIME_LIMIT", True)
                 media = inspected.value
                 if media is None:
-                    return to_row(ref, inspected, BillingFields())
+                    return await self._deliver(to_row(ref, inspected, BillingFields()))
             actual = replace(media.ref, metadata=replace(media.ref.metadata, duration_seconds=float(media.duration_seconds)))
             if actual.video_id == lease.video_id:
-                return await self._evaluate(actual, media, lease, settlement, answer)
+                return await self._deliver(await self._evaluate(actual, media, lease, settlement, answer))
         finally:
             heartbeat.cancel()
             with suppress(asyncio.CancelledError, StateUnavailable):
@@ -318,6 +336,13 @@ class _Run:
         finally:
             if owns_media:
                 media.close()
+
+    async def _skip_answered(self, ref: VideoRef, answer: AnswerState) -> JsonObject:
+        self.previous += 1
+        return await self._deliver(to_row(
+            ref, Outcome("skipped", "ALREADY_ANSWERED"), BillingFields(), is_new=False,
+            first_seen_at=answer.first_seen_at, first_seen_run_id=answer.first_seen_run_id,
+        ))
 
     async def _evaluate(self, ref, media, lease, settlement, answer) -> JsonObject:
         duration = media.duration_seconds
@@ -384,10 +409,6 @@ class _Run:
                         self.stop_reason = row["errorCode"]
                         break
                     if row:
-                        await self._push(row)
-                        if _definitive(row):
-                            seen = datetime.fromisoformat(row["firstSeenAt"]) if row["firstSeenAt"] else None
-                            await self._record_answer(row, seen)
                         if row["retryable"]:
                             self.retry.append(ref)
                         else:

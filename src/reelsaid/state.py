@@ -191,20 +191,18 @@ class State:
                     return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
                 queue, expected_request_id = await self._queue_for(slot)
                 head = await queue.list_and_lock_head(lock_duration=self.lock_duration, limit=1)
+                if not head.items:
+                    return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
                 if baseline is not None:
                     try:
                         changed = (await self.lookup(self.tenant_id, video_id, options)).changed_since(baseline)
                     except BaseException:
-                        if head.items:
-                            with suppress(ApifyClientError):
-                                await queue.delete_request_lock(head.items[0].id)
+                        with suppress(ApifyClientError):
+                            await queue.delete_request_lock(head.items[0].id)
                         raise
                     if changed:
-                        if head.items:
-                            await queue.delete_request_lock(head.items[0].id)
+                        await queue.delete_request_lock(head.items[0].id)
                         return Outcome("skipped", "RESULT_AVAILABLE")
-                if not head.items:
-                    return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
                 request_id = head.items[0].id
                 if request_id != expected_request_id:
                     await queue.delete_request_lock(request_id)

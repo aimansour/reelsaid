@@ -64,6 +64,8 @@
                 }
             },
             "transcriptSource": { "enum": ["asr", "captions", null], "title": "Transcript source", "description": "Whether speech recognition or timed original-language captions supplied the transcript." },
+            "billingStatus": { "enum": ["free", "settled", "incomplete", "unknown"], "title": "Event settlement status" },
+            "billingOriginRunId": { "type": ["string", "null"], "title": "Original run for a recovered transcript" },
             "metadata": { "$ref": "#/definitions/metadata", "title": "Instagram post and video metadata" },
             "quality": {
                 "type": ["object", "null"],
