@@ -390,3 +390,47 @@ class State:
             )
         except (ValueError, KeyError, TypeError, zlib.error) as error:
             raise StateUnavailable("Checkpoint could not be read") from error
+
+
+class LocalState(State):
+    """Reuse state records with local SDK storage and process-scoped leases."""
+
+    async def _get(self, key: str) -> JsonObject | None:
+        value = await self._store.get_value(key)
+        if value is not None and not isinstance(value, dict):
+            raise StateUnavailable("Local state record has an invalid shape")
+        return value
+
+    async def _set(self, key: str, value: JsonObject) -> None:
+        await self._store.set_value(key, value)
+
+    async def acquire(
+        self, video_id: str, run_id: str, *, options: TranscriptOptions | None = None,
+        baseline: CacheLookup | None = None,
+    ) -> Outcome[Lease]:
+        if run_id != self.run_id:
+            raise StateAccessError("State belongs to a different run")
+        slot = claim_slot(video_id)
+        async with self._guards.setdefault(slot, asyncio.Lock()):
+            if slot in self._active:
+                return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
+            if baseline is not None:
+                if options is None:
+                    raise ValueError("Refresh coordination requires transcript options")
+                if (await self.lookup(self.tenant_id, video_id, options)).changed_since(baseline):
+                    return Outcome("skipped", "RESULT_AVAILABLE")
+            claim_id = uuid4().hex
+            lease = Lease(video_id, self.tenant_id, run_id, claim_id, slot, claim_id)
+            self._active[slot] = lease
+            return Outcome("success", value=lease)
+
+    async def _renew_active(self, lease: Lease) -> bool:
+        return self._owns(lease)
+
+    async def release(self, lease: Lease) -> bool:
+        async with self._guards[lease.slot]:
+            if not self._owns(lease):
+                return False
+            del self._active[lease.slot]
+            self._staged.discard(lease.claim_id)
+            return True

@@ -3,11 +3,13 @@
 import asyncio
 from datetime import UTC, datetime
 from os import environ
+from uuid import uuid4
 
 from apify import Actor, Event
 from apify_client import ApifyClientAsync
 from apify_client.errors import ApifyClientError
 from curl_cffi.requests import AsyncSession
+from crawlee.storages import Dataset, KeyValueStore
 
 from .actor import ActorContext, run
 from .billing import ApifyCharges, BillingError, PROPOSED_BASE, PROPOSED_MINUTE, RunBudget, RunPricing
@@ -15,7 +17,7 @@ from .groq import GroqAdapter, GroqPool, GroqTransport, load_accounts
 from .input import parse_input
 from .instagram import InstagramClient
 from .media import MediaClient
-from .state import State, StateAccessError, StateUnavailable
+from .state import LocalState, State, StateAccessError, StateUnavailable
 
 
 class ApifyOutput:
@@ -43,6 +45,27 @@ class ApifyOutput:
         await self.client.key_value_store(self.store_id).set_record(key, value, content_type=content_type, timeout="short")
 
 
+class LocalOutput:
+    def __init__(self, dataset: Dataset, store: KeyValueStore):
+        self.dataset = dataset
+        self.store = store
+        self.dataset_id = dataset.id
+        self.store_id = store.id
+
+    async def read(self, dataset_id: str) -> list[dict]:
+        dataset = self.dataset if dataset_id == self.dataset_id else await Actor.open_dataset(id=dataset_id)
+        return [dict(item) for item in await dataset.list_items()]
+
+    async def existing(self) -> list[dict]:
+        return await self.read(self.dataset_id)
+
+    async def push(self, row: dict) -> None:
+        await self.dataset.push_data(row)
+
+    async def put(self, key: str, value: object, content_type: str = "application/json") -> None:
+        await self.store.set_value(key, value, content_type=content_type)
+
+
 async def main() -> None:
     async with Actor, AsyncSession(impersonate="chrome", trust_env=False) as web, AsyncSession(trust_env=False) as provider_http:
         env = Actor.get_env()
@@ -55,30 +78,35 @@ async def main() -> None:
         concurrency = 1
         measure = environ.get("REELSAID_BENCHMARK") == "1"
         pricing = RunPricing(RunBudget(env["max_total_charge_usd"]), PROPOSED_BASE["FREE"], PROPOSED_MINUTE, False)
-        client = ApifyClientAsync(token=env["token"], api_url=env["api_base_url"], max_retries=0)
-        if not cloud:
-            await Actor.fail(status_message="Use Apify to run this Actor. Local verification is available in the test suite.")
-            return
-        output = ApifyOutput(client, env["default_dataset_id"], env["default_key_value_store_id"])
+        run_id = env["run_id"] if cloud else uuid4().hex
+        if cloud:
+            client = ApifyClientAsync(token=env["token"], api_url=env["api_base_url"], max_retries=0)
+            output = ApifyOutput(client, env["default_dataset_id"], env["default_key_value_store_id"])
+        else:
+            output = LocalOutput(await Actor.open_dataset(), await Actor.open_key_value_store())
         if plan.valid_options and (plan.sources or plan.options.resume_from_dataset_id):
             try:
-                scoped_run = client.run(env["run_id"])
-                details, state = await asyncio.gather(
-                    scoped_run.get(timeout="short"),
-                    State.open(Actor.apify_client, env["user_id"], env["run_id"]),
-                )
-                if details is None:
-                    raise BillingError("Run pricing is unavailable")
-                is_ppe = details.pricing_info is not None and details.pricing_info.pricing_model == "PAY_PER_EVENT"
-                journal = await state.load_run_billing() if is_ppe else None
-                pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"], journal)
-                provider = ApifyCharges(scoped_run) if pricing.charges_enabled else None
-                memory = details.options.memory_mbytes
-                concurrency = 8 if memory >= 2048 else 4 if memory >= 512 else 2 if memory >= 256 else 1
+                if cloud:
+                    scoped_run = client.run(run_id)
+                    details, state = await asyncio.gather(
+                        scoped_run.get(timeout="short"),
+                        State.open(Actor.apify_client, env["user_id"], run_id),
+                    )
+                    if details is None:
+                        raise BillingError("Run pricing is unavailable")
+                    is_ppe = details.pricing_info is not None and details.pricing_info.pricing_model == "PAY_PER_EVENT"
+                    journal = await state.load_run_billing() if is_ppe else None
+                    pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"], journal)
+                    provider = ApifyCharges(scoped_run) if pricing.charges_enabled else None
+                    memory = details.options.memory_mbytes
+                    concurrency = 8 if memory >= 2048 else 4 if memory >= 512 else 2 if memory >= 256 else 1
+                else:
+                    local_store = await Actor.open_key_value_store(name="reelsaid-local-state")
+                    state = LocalState(Actor.apify_client, local_store, "local", run_id)
                 if keys := environ.get("REELSAID_GROQ_KEYS"):
                     accounts = load_accounts(keys, environ.get("REELSAID_GROQ_LIMITS", "{}"))
                     groq = GroqAdapter(
-                        GroqTransport(provider_http), GroqPool(accounts, rotation_seed=env["run_id"], measure=measure),
+                        GroqTransport(provider_http), GroqPool(accounts, rotation_seed=run_id, measure=measure),
                     )
             except (ApifyClientError, BillingError, StateUnavailable, StateAccessError, ValueError):
                 await Actor.fail(status_message="Run configuration could not be verified.")

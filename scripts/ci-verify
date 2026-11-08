@@ -51,6 +51,15 @@ case "$1" in
     periodic)
         npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/release-actor.sh periodic
         ;;
+    runner-health)
+        ensure_uv
+        if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -y --no-install-recommends ffmpeg
+        fi
+        bash scripts/install-quality-models
+        npm exec --yes --package=apify-cli@1.11.0 -- bash -c './scripts/verify runner && bash scripts/check-runner.sh batch'
+        ;;
     fail)
         exit 1
         ;;
