@@ -25,9 +25,9 @@ concurrency:
 jobs:
   verify:
     if: >-
-      github.actor == github.repository_owner &&
-      github.triggering_actor == github.repository_owner &&
-      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'schedule' ||
+      (github.actor == github.repository_owner && github.triggering_actor == github.repository_owner))
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
@@ -39,6 +39,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ inputs.source_revision }}
           CHECK_MODE: ${{ inputs.check }}
+          PERIODIC_SOURCE_REVISION: ${{ secrets.PERIODIC_SOURCE_REVISION }}
           SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
           SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
@@ -46,15 +47,25 @@ jobs:
         run: |
           scratch=$(mktemp -d)
           trap 'rm -rf -- "$scratch"' EXIT
+          selection='head'
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             CHECK_MODE=periodic
-          elif [[ ! "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+          fi
+          if [[ "$CHECK_MODE" == periodic ]]; then
+            if [[ -n "$SOURCE_REVISION" && "$SOURCE_REVISION" != "$PERIODIC_SOURCE_REVISION" ]]; then
+              printf '%s\n' 'Approved source revision required.'
+              exit 1
+            fi
+            SOURCE_REVISION=$PERIODIC_SOURCE_REVISION
+            selection=approved
+          fi
+          if [[ ! "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
             printf '%s\n' 'Approved source revision required.'
             exit 1
           fi
-          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" >/dev/null 2>&1; then
+          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" "$selection" >/dev/null 2>&1; then
             printf '%s\n' 'Approved source revision unavailable.'
             exit 1
           fi
-          unset SOURCE_KEY SOURCE_REPOSITORY
+          unset SOURCE_KEY SOURCE_REPOSITORY PERIODIC_SOURCE_REVISION
           bash .github/scripts/verify.sh "$scratch" "$CHECK_MODE"

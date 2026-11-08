@@ -45,6 +45,7 @@ jobs:
           SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
           SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          RELEASE_PRICING_SHA256: ${{ secrets.RELEASE_PRICING_SHA256 }}
         shell: bash
         run: |
           set -eu
