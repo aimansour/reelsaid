@@ -4,6 +4,8 @@ cd -- "$(dirname "$0")/.."
 workspace=$(mktemp -d)
 trap 'rm -rf -- "$workspace"' EXIT
 cp -R probes/state/. "$workspace/"
+mkdir "$workspace/reelsaid"
+cp src/reelsaid/{contracts,state}.py "$workspace/reelsaid/"
 apify actors push --dir "$workspace" --wait-for-finish 300 --json
 key="probe-$(python3 -c 'from uuid import uuid4; print(uuid4().hex)')"
 actor=aimansour/reelsaid-state-probe

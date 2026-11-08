@@ -1,23 +1,26 @@
-"""Account-scoped results and checkpoint state with fenced, cross-run video leases."""
+"""Account-scoped results and ownership backed by native Apify storage."""
 
+import asyncio
 import base64
 import hashlib
 import json
 import zlib
+from contextlib import suppress
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-from typing import Protocol
-from urllib.parse import urlsplit
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from curl_cffi.requests import AsyncSession, RequestsError
+from apify_client import ApifyClientAsync
+from apify_client.errors import ApifyApiError, ApifyClientError
 
 from .contracts import JsonObject, Outcome, Status, TranscriptOptions
 
 
-CHECKPOINT_PART_SIZE = 128 * 1024
+CHECKPOINT_PART_SIZE = 512 * 1024
+CLAIM_SHARDS = 64
 DEFINITIVE_FREE = frozenset({"NO_AUDIO", "NO_SPEECH", "SILENCE", "MUSIC_ONLY"})
-Parameter = str | int | None
+LOCK_REJECTED = frozenset({400, 403, 404, 409})
+SHARED_REQUEST = {"url": "https://reelsaid.invalid/work", "uniqueKey": "reelsaid-work"}
 
 
 class StateAccessError(ValueError):
@@ -28,48 +31,13 @@ class StateUnavailable(RuntimeError):
     pass
 
 
-class StateBackend(Protocol):
-    async def query(self, operation: str, *parameters: Parameter) -> list[JsonObject]: ...
+def _key(prefix: str, *identity: str) -> str:
+    value = hashlib.sha256(json.dumps(identity, separators=(",", ":")).encode()).hexdigest()
+    return f"{prefix}-{value}"
 
 
-class D1Backend:
-    """Client for the private, allowlisted state API."""
-
-    def __init__(self, session: AsyncSession, origin: str, secret: str):
-        url = urlsplit(origin)
-        if url.scheme != "https" or not url.hostname or url.username or url.path not in ("", "/") or url.query or url.fragment:
-            raise StateAccessError("Invalid state service origin")
-        if not secret:
-            raise StateAccessError("Missing state service credential")
-        self._session = session
-        self._url = origin.rstrip("/") + "/v1/query"
-        self._headers = {"Authorization": f"Bearer {secret}"}
-
-    async def query(self, operation: str, *parameters: Parameter) -> list[JsonObject]:
-        try:
-            response = await self._session.post(
-                self._url,
-                headers=self._headers,
-                json={"operation": operation, "parameters": parameters},
-                allow_redirects=False,
-                timeout=8,
-            )
-            if response.status_code == 200:
-                records = response.json()
-                if isinstance(records, list) and all(isinstance(row, dict) for row in records):
-                    return records
-        except (RequestsError, ValueError):
-            pass
-        raise StateUnavailable("State service could not complete the operation")
-
-
-def _json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False)
-
-
-def _fingerprint(options: TranscriptOptions) -> str:
-    identity = (1, options.language, options.prefer_captions, options.word_level_timestamps)
-    return hashlib.sha256(_json(identity).encode()).hexdigest()
+def _result_key(video_id: str, options: TranscriptOptions) -> str:
+    return _key("result-v1", video_id, options.language, str(options.prefer_captions), str(options.word_level_timestamps))
 
 
 @dataclass(frozen=True)
@@ -77,11 +45,9 @@ class Lease:
     video_id: str
     tenant_id: str
     run_id: str
-    fence: str
-    expires_ms: int
-
-    def parameters(self) -> tuple[str, str, str, str]:
-        return self.video_id, self.tenant_id, self.run_id, self.fence
+    claim_id: str
+    slot: int
+    request_id: str
 
 
 @dataclass(frozen=True)
@@ -94,6 +60,7 @@ class CachedResult:
 @dataclass(frozen=True)
 class CacheLookup:
     result: CachedResult | None = None
+    successful: CachedResult | None = None
 
     @property
     def revision(self) -> str | None:
@@ -101,7 +68,7 @@ class CacheLookup:
 
     @property
     def reusable(self) -> bool:
-        return self.result is not None and self.result.status == "success"
+        return self.successful is not None
 
     def changed_since(self, baseline: "CacheLookup") -> bool:
         return self.result is not None and self.revision != baseline.revision
@@ -124,28 +91,88 @@ class Checkpoint:
 
 
 class State:
-    def __init__(self, backend: StateBackend, tenant_id: str, run_id: str, *, lease_ms: int = 90_000):
-        if not tenant_id or not run_id or lease_ms <= 0:
+    def __init__(
+        self, client: ApifyClientAsync, store, tenant_id: str, run_id: str, *,
+        namespace: str = "reelsaid-v1", lock_seconds: int = 90,
+    ):
+        if not tenant_id or not run_id:
             raise StateAccessError("State requires an authenticated account and run")
-        self._backend = backend
+        self._client = client
+        self._store = store
         self.tenant_id = tenant_id
         self.run_id = run_id
-        self._lease_ms = lease_ms
+        self._namespace = namespace
+        self._client_key = uuid4().hex
+        self.lock_duration = timedelta(seconds=lock_seconds)
+        self._queues = {}
+        self._guards: dict[int, asyncio.Lock] = {}
+        self._active: dict[int, Lease] = {}
+        self._staged: set[str] = set()
+
+    @classmethod
+    async def open(
+        cls, client: ApifyClientAsync, tenant_id: str, run_id: str, *,
+        namespace: str = "reelsaid-v1", lock_seconds: int = 90,
+    ):
+        try:
+            store_info = await client.key_value_stores().get_or_create(name=f"{namespace}-state")
+            store = client.key_value_store(store_info.id)
+            await cls._restrict(store, store_info, tenant_id)
+        except ApifyClientError as error:
+            raise StateUnavailable("Account state is unavailable") from error
+        return cls(client, store, tenant_id, run_id, namespace=namespace, lock_seconds=lock_seconds)
+
+    @staticmethod
+    async def _restrict(resource, info, tenant_id: str) -> None:
+        if info.user_id != tenant_id:
+            raise StateAccessError("Storage belongs to a different account")
+        if info.general_access != "RESTRICTED":
+            updated = await resource.update(general_access="RESTRICTED")
+            if updated.general_access != "RESTRICTED":
+                raise StateUnavailable("Private storage access could not be confirmed")
+
+    async def _queue_for(self, slot: int):
+        if slot not in self._queues:
+            info = await self._client.request_queues().get_or_create(name=f"{self._namespace}-work-{slot:02x}")
+            queue = self._client.request_queue(info.id, client_key=self._client_key)
+            await self._restrict(queue, info, self.tenant_id)
+            registration = await queue.add_request(SHARED_REQUEST)
+            self._queues[slot] = (queue, registration.request_id)
+        return self._queues[slot]
 
     def _check_tenant(self, tenant_id: str) -> None:
         if tenant_id != self.tenant_id:
             raise StateAccessError("State belongs to a different account")
 
     def _owns(self, lease: Lease) -> bool:
-        return lease.tenant_id == self.tenant_id and lease.run_id == self.run_id
+        return self._active.get(lease.slot) == lease
+
+    async def _get(self, key: str) -> JsonObject | None:
+        try:
+            record = await self._store.get_record(key)
+        except ApifyClientError as error:
+            raise StateUnavailable("Account state could not be read") from error
+        if record is None:
+            return None
+        value = record["value"]
+        if not isinstance(value, dict):
+            raise StateUnavailable("Account state record has an invalid shape")
+        return value
+
+    async def _set(self, key: str, value: JsonObject) -> None:
+        try:
+            await self._store.set_record(key, value, content_type="application/json")
+        except ApifyClientError as error:
+            raise StateUnavailable("Account state could not be saved") from error
 
     async def lookup(self, tenant_id: str, video_id: str, options: TranscriptOptions) -> CacheLookup:
         self._check_tenant(tenant_id)
-        rows = await self._backend.query("lookup", tenant_id, video_id, _fingerprint(options))
-        if not rows:
+        record = await self._get(_result_key(video_id, options))
+        if not record:
             return CacheLookup()
-        row = rows[0]
-        return CacheLookup(CachedResult(row["revision"], row["status"], json.loads(row["payload"])))
+        latest = CachedResult(**record["latest"])
+        saved = record.get("successful")
+        return CacheLookup(latest, latest if latest.status == "success" else CachedResult(**saved) if saved else None)
 
     async def acquire(
         self, video_id: str, run_id: str, *, options: TranscriptOptions | None = None,
@@ -155,84 +182,172 @@ class State:
             raise StateAccessError("State belongs to a different run")
         if baseline is not None and options is None:
             raise ValueError("Refresh coordination requires transcript options")
-        fence = uuid4().hex
-        rows = await self._backend.query(
-            "acquire", video_id, self.tenant_id, run_id, fence, self._lease_ms,
-            _fingerprint(options) if baseline is not None else None,
-            baseline.revision if baseline is not None else None,
-        )
-        if rows:
-            return Outcome("success", value=Lease(video_id, self.tenant_id, run_id, fence, rows[0]["expires_ms"]))
-        if baseline is not None and (await self.lookup(self.tenant_id, video_id, options)).changed_since(baseline):
-            return Outcome("skipped", "RESULT_AVAILABLE")
-        return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
+        slot = hashlib.sha256(video_id.encode()).digest()[0] % CLAIM_SHARDS
+        guard = self._guards.setdefault(slot, asyncio.Lock())
+        try:
+            async with guard:
+                if slot in self._active:
+                    return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
+                queue, expected_request_id = await self._queue_for(slot)
+                head = await queue.list_and_lock_head(lock_duration=self.lock_duration, limit=1)
+                if baseline is not None:
+                    try:
+                        changed = (await self.lookup(self.tenant_id, video_id, options)).changed_since(baseline)
+                    except BaseException:
+                        if head.items:
+                            with suppress(ApifyClientError):
+                                await queue.delete_request_lock(head.items[0].id)
+                        raise
+                    if changed:
+                        if head.items:
+                            await queue.delete_request_lock(head.items[0].id)
+                        return Outcome("skipped", "RESULT_AVAILABLE")
+                if not head.items:
+                    return Outcome("deferred", "VIDEO_IN_PROGRESS", True)
+                request_id = head.items[0].id
+                if request_id != expected_request_id:
+                    await queue.delete_request_lock(request_id)
+                    raise StateUnavailable("Work queue contains an unexpected record")
+                lease = Lease(video_id, self.tenant_id, run_id, uuid4().hex, slot, request_id)
+                self._active[slot] = lease
+                return Outcome("success", value=lease)
+        except ApifyClientError as error:
+            raise StateUnavailable("Work ownership could not be established") from error
 
-    async def renew(self, lease: Lease) -> Lease | None:
+    async def _renew_active(self, lease: Lease) -> bool:
         if not self._owns(lease):
-            return None
-        rows = await self._backend.query("renew", *lease.parameters(), self._lease_ms)
-        return Lease(*lease.parameters(), rows[0]["expires_ms"]) if rows else None
+            return False
+        try:
+            queue, _ = self._queues[lease.slot]
+            refreshed = await queue.prolong_request_lock(
+                lease.request_id, lock_duration=self.lock_duration,
+            )
+            if refreshed is not None:
+                return True
+        except ApifyApiError as error:
+            if error.status_code not in LOCK_REJECTED:
+                raise StateUnavailable("Work ownership could not be renewed") from error
+        except ApifyClientError as error:
+            raise StateUnavailable("Work ownership could not be renewed") from error
+        del self._active[lease.slot]
+        self._staged.discard(lease.claim_id)
+        return False
+
+    async def renew(self, lease: Lease) -> bool:
+        if not self._owns(lease):
+            return False
+        async with self._guards[lease.slot]:
+            return await self._renew_active(lease)
 
     async def release(self, lease: Lease) -> bool:
-        return self._owns(lease) and bool(await self._backend.query("release", *lease.parameters()))
+        if not self._owns(lease):
+            return False
+        async with self._guards[lease.slot]:
+            if not self._owns(lease):
+                return False
+            del self._active[lease.slot]
+            self._staged.discard(lease.claim_id)
+            try:
+                queue, _ = self._queues[lease.slot]
+                await queue.delete_request_lock(lease.request_id)
+            except ApifyApiError as error:
+                if error.status_code in LOCK_REJECTED:
+                    return False
+                raise StateUnavailable("Work release could not be confirmed") from error
+            except ApifyClientError as error:
+                raise StateUnavailable("Work release could not be confirmed") from error
+            return True
 
     async def stage(self, lease: Lease, options: TranscriptOptions, payload: JsonObject) -> bool:
         if not self._owns(lease):
             return False
-        return bool(await self._backend.query("stage", *lease.parameters(), _fingerprint(options), _json(payload)))
+        async with self._guards[lease.slot]:
+            if not await self._renew_active(lease):
+                return False
+            key = _key("staged", lease.video_id)
+            record = {
+                "resultKey": _result_key(lease.video_id, options), "runId": self.run_id,
+                "claimId": lease.claim_id, "payload": payload,
+            }
+            if lease.claim_id in self._staged:
+                return await self._get(key) == record
+            await self._set(key, record)
+            self._staged.add(lease.claim_id)
+            return True
+
+    async def load_stage(self, lease: Lease) -> JsonObject | None:
+        if not self._owns(lease):
+            return None
+        return await self._get(_key("staged", lease.video_id))
 
     async def commit(self, lease: Lease, options: TranscriptOptions, status: Status, payload: JsonObject) -> bool:
-        if not self._owns(lease) or status not in {"success", "partial", "skipped"}:
+        if not self._owns(lease) or lease.claim_id not in self._staged or status not in {"success", "partial", "skipped"}:
             return False
-        return bool(await self._backend.query(
-            "commit", *lease.parameters(), _fingerprint(options), status, _json(payload),
-        ))
+        async with self._guards[lease.slot]:
+            if not await self._renew_active(lease):
+                return False
+            result = asdict(CachedResult(lease.claim_id, status, payload))
+            record = {"latest": result}
+            if status != "success":
+                previous = await self.lookup(self.tenant_id, lease.video_id, options)
+                if previous.successful:
+                    record["successful"] = asdict(previous.successful)
+            await self._set(_result_key(lease.video_id, options), record)
+            return True
 
-    async def lookup_answer(self, tenant_id: str, watchlist_id: str, video_id: str) -> AnswerState:
+    async def lookup_answer(self, tenant_id: str, watchlist_id: str | None, video_id: str) -> AnswerState:
         self._check_tenant(tenant_id)
-        rows = await self._backend.query("lookup_answer", tenant_id, watchlist_id, video_id)
-        if not rows:
+        record = await self._get(_key("answer", video_id))
+        if not record:
             return AnswerState()
-        return AnswerState(True, datetime.fromtimestamp(rows[0]["first_seen_ms"] / 1000, UTC))
+        return AnswerState(True, datetime.fromisoformat(record["firstSeenAt"]))
 
     async def record_answer(
-        self, tenant_id: str, watchlist_id: str, video_id: str, outcome: Outcome[object],
+        self, tenant_id: str, watchlist_id: str | None, video_id: str, outcome: Outcome[object],
     ) -> AnswerState:
-        self._check_tenant(tenant_id)
-        if outcome.retryable or (
+        current = await self.lookup_answer(tenant_id, watchlist_id, video_id)
+        if current.answered or outcome.retryable or (
             outcome.status != "success" and (outcome.status != "skipped" or outcome.error_code not in DEFINITIVE_FREE)
         ):
-            return await self.lookup_answer(tenant_id, watchlist_id, video_id)
-        rows = await self._backend.query("record_answer", tenant_id, watchlist_id, video_id)
-        if rows:
-            return AnswerState(True, datetime.fromtimestamp(rows[0]["first_seen_ms"] / 1000, UTC), True)
-        return await self.lookup_answer(tenant_id, watchlist_id, video_id)
+            return current
+        seen = datetime.now(UTC)
+        await self._set(_key("answer", video_id), {
+            "firstSeenAt": seen.isoformat(), "firstSeenRunId": self.run_id, "watchlistId": watchlist_id,
+        })
+        return AnswerState(True, seen, True)
 
     async def save_checkpoint(self, tenant_id: str, dataset_id: str, checkpoint: Checkpoint) -> None:
         self._check_tenant(tenant_id)
-        payload = base64.b64encode(zlib.compress(_json(asdict(checkpoint)).encode())).decode("ascii")
+        key = _key("checkpoint", dataset_id)
+        payload = json.dumps(asdict(checkpoint), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        encoded = base64.b64encode(zlib.compress(payload.encode())).decode("ascii")
+        if len(encoded) <= CHECKPOINT_PART_SIZE:
+            await self._set(key, {"data": encoded})
+            return
         generation = uuid4().hex
-        parts = range(0, len(payload), CHECKPOINT_PART_SIZE)
-        for index, start in enumerate(parts):
-            await self._backend.query(
-                "put_checkpoint_part", tenant_id, dataset_id, generation, index,
-                payload[start:start + CHECKPOINT_PART_SIZE],
-            )
-        saved = await self._backend.query("publish_checkpoint", tenant_id, dataset_id, generation, len(parts))
-        if not saved:
-            raise StateUnavailable("Checkpoint publication was not confirmed")
-        if previous := saved[0]["previous_generation"]:
-            await self._backend.query("delete_checkpoint_parts", tenant_id, dataset_id, previous)
+        offsets = range(0, len(encoded), CHECKPOINT_PART_SIZE)
+        for index, start in enumerate(offsets):
+            await self._set(_key("checkpoint-part", dataset_id, generation, str(index)), {
+                "data": encoded[start:start + CHECKPOINT_PART_SIZE],
+            })
+        await self._set(key, {"generation": generation, "count": len(offsets)})
 
     async def load_checkpoint(self, tenant_id: str, dataset_id: str) -> Checkpoint | None:
         self._check_tenant(tenant_id)
-        rows = await self._backend.query("load_checkpoint", tenant_id, dataset_id)
-        if not rows:
+        record = await self._get(_key("checkpoint", dataset_id))
+        if not record:
             return None
-        if rows[0]["chunk_count"] != len(rows) or any(index != row["part"] for index, row in enumerate(rows)):
-            raise StateUnavailable("Checkpoint is incomplete")
         try:
-            payload = json.loads(zlib.decompress(base64.b64decode("".join(row["payload"] for row in rows))))
+            encoded = record.get("data")
+            if encoded is None:
+                parts = []
+                for index in range(record["count"]):
+                    part = await self._get(_key("checkpoint-part", dataset_id, record["generation"], str(index)))
+                    if part is None:
+                        raise StateUnavailable("Checkpoint is incomplete")
+                    parts.append(part["data"])
+                encoded = "".join(parts)
+            payload = json.loads(zlib.decompress(base64.b64decode(encoded)))
             return Checkpoint(
                 tuple(payload["pending"]), tuple(payload["completed"]), payload["cursor"], payload["filters"],
                 payload["stop_reason"],

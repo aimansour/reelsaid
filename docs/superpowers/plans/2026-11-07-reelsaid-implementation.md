@@ -158,7 +158,7 @@ The signatures below describe data and ownership across tasks. `TenantId`, `RunI
 - [ ] Write these cases in the `state` suite.
 
   ```text
-  finished_owner_allows_recovery: assert active_owners(account, video) == 1 and released_owner_cannot_commit
+  expired_owner_allows_recovery: assert active_owners(account, video) == 1 and expired_owner_cannot_commit
   tenant_isolation: assert other_account_has_no_cache_watchlist_or_checkpoint_access
   overlapping_refresh_coalesces: assert concurrent_refreshes_share_one_processing_attempt
   checkpoint_preserves_completed_work: assert resumed_work_contains_pending_items_and_prior_paid_refs

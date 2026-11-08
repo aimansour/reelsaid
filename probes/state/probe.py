@@ -1,93 +1,77 @@
-"""Measure native claim and recovery primitives from two scoped Apify runs."""
+"""Exercise the account state contract from two independent scoped Apify runs."""
 
 import asyncio
-from datetime import timedelta
 from time import monotonic
 
 from apify import Actor
-from apify_client.errors import ApifyApiError
+
+from reelsaid.contracts import Outcome, TranscriptOptions
+from reelsaid.state import Checkpoint, State
 
 
-TTL = timedelta(seconds=4)
+OPTIONS = TranscriptOptions()
+VIDEO = "matched-video"
 
 
 async def wait_for_record(store, key):
     async with asyncio.timeout(24):
         while not (record := await store.get_record(key)):
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.2)
     return record["value"]
+
+
+async def hold(state, store):
+    lease = (await state.acquire(VIDEO, state.run_id)).value
+    assert lease and await state.stage(lease, OPTIONS, {"transcript": "staged"})
+    await store.set_record("probe-holder", {"ready": True})
+    await wait_for_record(store, "probe-replacement")
+    assert not await state.commit(lease, OPTIONS, "success", {"transcript": "stale"})
+    assert not await state.release(lease)
+    await store.set_record("probe-stale-checked", {"rejected": True})
+    result = await state.lookup(state.tenant_id, VIDEO, OPTIONS)
+    assert result.reusable and result.successful.payload == {"transcript": "delivered"}
+    checkpoint = await state.load_checkpoint(state.tenant_id, "probe")
+    assert checkpoint and checkpoint.completed == ({"videoId": VIDEO},)
+    assert (await state.lookup_answer(state.tenant_id, "different-list", VIDEO)).answered
+    return {"role": "holder", "staleFenced": True, "checkpointRecovered": True, "otherListAnswered": True}
+
+
+async def contend(state, store):
+    await wait_for_record(store, "probe-holder")
+    baseline = await state.lookup(state.tenant_id, VIDEO, OPTIONS)
+    first = await state.acquire(VIDEO, state.run_id)
+    assert first.error_code == "VIDEO_IN_PROGRESS" and not first.value
+    async with asyncio.timeout(18):
+        while not (lease := (await state.acquire(VIDEO, state.run_id)).value):
+            await asyncio.sleep(0.25)
+    recovered = await state.load_stage(lease)
+    assert recovered and recovered["payload"] == {"transcript": "staged"}
+    payload = {"transcript": "delivered"}
+    assert await state.stage(lease, OPTIONS, payload)
+    assert await state.commit(lease, OPTIONS, "success", payload)
+    assert (await state.record_answer(state.tenant_id, "original-list", VIDEO, Outcome("success"))).is_new
+    await state.save_checkpoint(state.tenant_id, "probe", Checkpoint(completed=({"videoId": VIDEO},)))
+    await store.set_record("probe-replacement", {"ready": True})
+    await wait_for_record(store, "probe-stale-checked")
+    assert await state.release(lease)
+    repeat = await state.acquire(VIDEO, state.run_id, options=OPTIONS, baseline=baseline)
+    assert repeat.error_code == "RESULT_AVAILABLE" and not repeat.value
+    return {"role": "contender", "blockedWhileOwned": True, "tookOverAfterExpiry": True, "reusedResult": True}
 
 
 async def main():
     async with Actor:
-        client = Actor.apify_client
-        env = Actor.get_env()
-        run_id, user_id = env["run_id"], env["user_id"]
+        env, client = Actor.get_env(), Actor.apify_client
         raw = await Actor.get_input()
-        role, key = raw["role"], raw["key"]
+        role, namespace = raw["role"], f"reelsaid-{raw['key']}"
         start = monotonic()
-        queue_info, store_info = await asyncio.gather(
-            client.request_queues().get_or_create(name=f"reelsaid-claim-{key}"),
-            client.key_value_stores().get_or_create(name=f"reelsaid-state-{key}"),
-        )
-        queue = client.request_queue(queue_info.id, client_key=run_id)
-        store = client.key_value_store(store_info.id)
-        assert queue_info.user_id == store_info.user_id == user_id
-        restrictions = {}
-        for name, resource, metadata in (("queue", queue, queue_info), ("store", store, store_info)):
-            try:
-                restricted = metadata if metadata.general_access == "RESTRICTED" else await resource.update(
-                    general_access="RESTRICTED",
-                )
-                restrictions[name] = restricted.general_access == "RESTRICTED"
-            except ApifyApiError as error:
-                restrictions[name] = error.status_code
-        request = {"url": "https://reelsaid.invalid/claim", "uniqueKey": "claim", "userData": {"runId": run_id}}
-        await store.set_record(role, {"runId": run_id})
-        peer = await wait_for_record(store, "holder" if role == "contender" else "contender")
-        registration = await queue.add_request(request)
-        existing = await queue.get_request(registration.request_id)
-        assert existing and existing.user_data
-        owner_id = existing.user_data.model_dump().get("runId")
-        assert owner_id in {peer["runId"], run_id}
-        initial = await queue.list_and_lock_head(lock_duration=TTL, limit=1)
-        won = bool(initial.items)
-        stale_rejected = None
-        replacement_acquired = False
-        if won:
-            await store.set_record("winner", {"runId": run_id})
-            await wait_for_record(store, "replacement")
-            try:
-                await queue.prolong_request_lock(registration.request_id, lock_duration=TTL)
-                stale_rejected = False
-            except ApifyApiError as error:
-                stale_rejected = error.status_code
-            assert stale_rejected
-            await store.set_record("stale-checked", {"rejected": stale_rejected})
-        else:
-            await wait_for_record(store, "winner")
-            try:
-                async with asyncio.timeout(15):
-                    while True:
-                        replacement = await queue.list_and_lock_head(lock_duration=TTL, limit=1)
-                        if replacement.items:
-                            assert replacement.items[0].id == registration.request_id
-                            replacement_acquired = True
-                            break
-                        await asyncio.sleep(0.25)
-            except TimeoutError as error:
-                raise RuntimeError("Apify lock did not become available") from error
-            await queue.prolong_request_lock(registration.request_id, lock_duration=timedelta(seconds=10))
-            await store.set_record("replacement", {"runId": run_id})
-            await wait_for_record(store, "stale-checked")
-            await queue.delete_request_lock(registration.request_id)
+        state = await State.open(client, env["user_id"], env["run_id"], namespace=namespace, lock_seconds=5)
+        info = await client.key_value_stores().get_or_create(name=f"{namespace}-state")
+        assert info.general_access == "RESTRICTED"
+        operation = {"holder": hold, "contender": contend}[role]
+        result = await operation(state, client.key_value_store(info.id))
         await Actor.push_data({
-            "role": role,
-            "won": won,
-            "registeredFirst": not registration.was_already_present,
-            "restricted": restrictions,
-            "staleRejected": stale_rejected,
-            "replacementAcquired": replacement_acquired,
+            **result,
             "permissionLevel": env["permission_level"],
             "milliseconds": round((monotonic() - start) * 1000),
         })
