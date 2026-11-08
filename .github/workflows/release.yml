@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact revision approved for the operation
+        required: true
+        type: string
+      package_revision:
+        description: Exact package revision approved for the operation
+        required: true
+        type: string
+      operation:
+        description: Release operation
+        required: true
+        type: choice
+        options: [candidate, rehearse, publish]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reelsaid-maintenance
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out approved package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run approved release operation
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          PACKAGE_REVISION: ${{ inputs.package_revision }}
+          OPERATION: ${{ inputs.operation }}
+          SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
+          SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: bash
+        run: |
+          set -eu
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          if [[ ! "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ || "$PACKAGE_REVISION" != "$GITHUB_SHA" ]]; then
+            printf '%s\n' 'Approved revisions required.'
+            exit 1
+          fi
+          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" >/dev/null 2>&1; then
+            printf '%s\n' 'Approved source revision unavailable.'
+            exit 1
+          fi
+          unset SOURCE_KEY SOURCE_REPOSITORY
+          bash .github/scripts/verify.sh "$scratch" release "$OPERATION" "$SOURCE_REVISION" "$PACKAGE_REVISION"
