@@ -2,8 +2,16 @@
   "spoken": "shortSpoken from the fixture catalog, with its on-screen caption reference",
   "sidecar": "Mono 16 kHz FLAC derived from the same original video",
   "silent": {"kind": "zero_pcm", "durationSeconds": 9, "expected": "silence"},
-  "instrumental": {"kind": "three_tone_chord", "durationSeconds": 9, "expected": "music_only"},
+  "instrumental": {"kind": "three_tone_chord", "durationSeconds": 9, "expected": "no_speech"},
+  "piano": {
+    "source": "https://commons.wikimedia.org/wiki/File:Goldberg_Variations_01_Aria.ogg",
+    "performer": "Kimiko Ishizaka",
+    "license": "CC0-1.0",
+    "startSeconds": 4,
+    "durationSeconds": 12,
+    "expected": "music_only"
+  },
   "speechOverMusic": {"kind": "spoken_with_chord_bed", "expected": "speech"},
   "languages": ["en", "es"],
-  "realNoSpeechCandidate": "Retain the source duration and assess its audio before assigning a ground-truth class."
+  "realNoSpeechCandidate": "The NASA sample has an uncertain speech label. The product cloud run returned an uncharged partial."
 }

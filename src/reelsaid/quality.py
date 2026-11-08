@@ -159,9 +159,17 @@ def _suspect(draft: TranscriptDraft, media: MediaPlan) -> bool:
     edge = min(.9, max(.2, duration * .10))
     if not spans or spans[0][0] > edge or duration - spans[-1][1] > edge:
         return True
+    if draft.words:
+        first_word = min(word.start for word in draft.words)
+        last_word = max(word.end for word in draft.words)
+        if first_word > min(.45, edge) or duration - last_word > min(.55, edge):
+            return True
     if sum(end - start for start, end in spans) < duration * .60:
         return True
     if sum(character.isalnum() for character in draft.text) < duration * 1.5:
+        return True
+    tokens = tuple(_words(segment.text) for segment in draft.segments)
+    if any(len(left) >= 3 and left == right for left, right in zip(tokens, tokens[1:])):
         return True
     return any(
         (segment.no_speech_prob or 0) >= .55 or (segment.avg_logprob or 0) <= -.85
@@ -193,7 +201,7 @@ def parse_captions(text: str, language: str, duration: Decimal) -> TranscriptDra
             if match := _CUE.match(line):
                 start, end = map(_cue_time, match.groups())
                 cue = html.unescape(re.sub(r"<[^>]+>", "", " ".join(lines[index + 1:]))).strip()
-                if 0 <= start < end <= timeline + .2 and any(character.isalnum() for character in cue):
+                if 0 <= start < min(timeline, end) and end <= timeline + .2 and any(character.isalnum() for character in cue):
                     segments.append(Segment(cue, start, min(timeline, end)))
                 break
     if not segments or any(right.start < left.end for left, right in zip(segments, segments[1:])):

@@ -88,7 +88,8 @@ async def main():
                        "amix=inputs=2:duration=first:weights=1 0.45", "-ar", 16000, "-ac", 1, mixture)
 
                 async def upload(media, options, context, **kwargs):
-                    return await transcribe(media, options, context, prepared_file=media.audio.file, **kwargs)
+                    kwargs.setdefault("prepared_file", media.audio.file)
+                    return await transcribe(media, options, context, **kwargs)
 
                 async def no_asr(*args, **kwargs):
                     raise AssertionError("A verified non-speech fixture reached ASR")

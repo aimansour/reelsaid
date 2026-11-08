@@ -1,7 +1,9 @@
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -117,3 +119,49 @@ def test_suspect_result_without_independent_evidence_stays_free():
     assert outcome.status == "partial" and outcome.error_code == "QUALITY_UNVERIFIED"
     assert outcome.value.text == "Thanks." and not outcome.value.billable
     assert calls == [None]
+
+
+def test_word_edges_trigger_verification_even_when_segment_spans_whole_video():
+    raw = draft((0, 10, "The transcript lost a word at each end."))
+    timed = replace(raw, words=(Word("The transcript lost a word at each end.", .55, 9.35),))
+    result, calls = evaluate(media(), SpeechEvidence("speech", ((0, 10),), .97), timed)
+    assert result.status == "partial" and result.value.billable
+    assert result.value.assessment.missing_start and result.value.assessment.missing_end
+    assert result.value.affected_fraction == pytest.approx(.12) and calls == [None]
+
+
+def test_targeted_repair_keeps_unaffected_timeline(monkeypatch):
+    import reelsaid.quality as quality_module
+
+    plan = media()
+    plan = replace(plan, audio=replace(plan.audio, file=Path("existing.media")))
+    prepared = []
+    asr_calls = []
+
+    @asynccontextmanager
+    async def verify(candidate, context):
+        yield SpeechEvidence("speech", ((0, 4), (5, 8), (9, 10)), .95), candidate
+
+    @asynccontextmanager
+    async def trim(candidate, context, *, start, duration):
+        assert candidate.audio.file == Path("existing.media")
+        prepared.append((start, duration))
+        yield Path("slice.flac")
+
+    async def asr(candidate, options, context, **kwargs):
+        asr_calls.append(kwargs)
+        if kwargs:
+            assert candidate.audio.duration_seconds < plan.audio.duration_seconds
+            return Outcome("success", value=draft((.3, 3.3, "Restored middle."), text="Restored middle."))
+        return Outcome("success", value=draft(
+            (0, 4, "Original start."), (9, 10, "Original ending."), text="Original start. Original ending.",
+        ))
+
+    monkeypatch.setattr(quality_module, "prepare_upload", trim)
+    ctx = RunContext(None, None, datetime.now(UTC), lambda: False)
+    outcome = asyncio.run(evaluate_video(plan, TranscriptOptions(), ctx, speech_probe=verify, asr=asr))
+    assert outcome.status == "success" and outcome.value.billable
+    assert outcome.value.text == "Original start. Restored middle. Original ending."
+    assert [(segment.start, segment.end) for segment in outcome.value.segments] == [(0, 4), (5, 8), (9, 10)]
+    assert prepared[0] == pytest.approx((4.7, 3.6))
+    assert asr_calls == [{}, {"models": (LARGE,), "prepared_file": Path("slice.flac")}]

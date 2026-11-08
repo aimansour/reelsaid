@@ -128,7 +128,7 @@ async def _decode_audio(path: Path) -> bytes:
     except (TimeoutError, asyncio.CancelledError):
         with suppress(ProcessLookupError):
             process.kill()
-        await process.wait()
+        await process.communicate()
         raise
     if process.returncode != 0:
         raise MediaError("AUDIO_PREPARATION_FAILED")
