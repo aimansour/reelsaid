@@ -9,7 +9,7 @@ market = run_path(str(Path(__file__).with_name("benchmark-market.py")))
 request, benchmark = market["request"], market["benchmark"]
 store_name = market["STORE"]
 actor = "aimansour~reelsaid"
-campaign = "baseline"
+campaign = "parallel"
 
 
 def main():
@@ -34,9 +34,9 @@ def main():
         ("single-256", {"startUrls": [market_fixture["referenceReel"]]}, 256, 55),
         ("mixed-512", {"startUrls": market_fixture["mixedUrls"]}, 512, 65),
         ("profile-512", {"profiles": [market_fixture["profile"]], "maxResults": 12}, 512, 65),
-        ("matched-512", {"startUrls": profile_urls}, 512, 75),
-        ("batch-512", {"startUrls": larger}, 512, 85),
-        ("batch-256", {"startUrls": larger}, 256, 85),
+        ("matched-512", {"startUrls": profile_urls}, 512, 130),
+        ("batch-512", {"startUrls": larger}, 512, 150),
+        ("batch-256", {"startUrls": larger}, 256, 150),
     ]
     for label, payload, memory, timeout in cases:
         benchmark(actor, {**payload, **common}, 0.30, f"{path}/reelsaid-{campaign}-{label}",

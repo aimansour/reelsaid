@@ -130,3 +130,4 @@ class RunContext:
     expired: Callable[[], bool]
     media_client: MediaClient | None = None
     groq: GroqAdapter | None = None
+    discovery_concurrency: int = 1

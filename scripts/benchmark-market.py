@@ -73,7 +73,7 @@ def benchmark(actor, payload, cap, record, *, memory=None, timeout=75):
         request("PUT", record, report)
         first_text = None
         rows = []
-        while monotonic() - start < 110:
+        while monotonic() - start < max(110, timeout + 30):
             run = request("GET", f"actor-runs/{run['id']}", waitForFinish=2)["data"]
             rows = request("GET", f"datasets/{run['defaultDatasetId']}/items", limit=30)
             if first_text is None and any(map(usable, rows)):

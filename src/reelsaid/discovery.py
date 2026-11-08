@@ -1,5 +1,6 @@
 """Resolve submitted sources to unique, ordered video work."""
 
+import asyncio
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -278,11 +279,7 @@ class _DiscoveryRun:
     ) -> list[VideoRef]:
         if not CODE.fullmatch(code):
             raise InstagramError("INVALID_SHORTCODE")
-        if code not in self.posts:
-            try:
-                self.posts[code] = await self.context.instagram.post(code)
-            except InstagramError as error:
-                self.posts[code] = error
+        await self._fetch_post(code)
         result = self.posts[code]
         if isinstance(result, InstagramError):
             raise result
@@ -290,6 +287,16 @@ class _DiscoveryRun:
         if not videos:
             raise InstagramError("NO_VIDEO")
         return videos
+
+    async def _fetch_post(self, code: str) -> None:
+        if code not in self.posts:
+            try:
+                self.posts[code] = await self.context.instagram.post(code)
+            except InstagramError as error:
+                self.posts[code] = error
+
+    async def _prefetch(self, codes) -> None:
+        await asyncio.gather(*(self._fetch_post(code) for code in dict.fromkeys(codes) if code not in self.posts))
 
     async def add_post(
         self, value: str, ref: InputRef, *, is_url: bool = False, profile: str | None = None,
@@ -407,7 +414,8 @@ class _DiscoveryRun:
                 return None
 
     async def profile(
-        self, name: str, ref: InputRef, position: DiscoveryCursor,
+        self, name: str, ref: InputRef, position: DiscoveryCursor, *,
+        newest_limit: int | None, filters: FilterOptions,
     ) -> DiscoveryCursor | None:
         cursor, offset, profile_id = position.profile_cursor, position.profile_offset, position.profile_id
         seen_cursors = set()
@@ -426,9 +434,13 @@ class _DiscoveryRun:
             profile_id = page.profile_id or profile_id
             if not page.entries and cursor is None and not page.cursor:
                 self.error(ref, "EMPTY_PROFILE")
-            for entry in page.entries[offset:]:
+            entries = page.entries[offset:]
+            concurrency = self.context.discovery_concurrency
+            for start, entry in enumerate(entries):
                 if self.context.expired():
                     return replace(position, profile_cursor=cursor, profile_offset=offset, profile_id=profile_id)
+                if concurrency > 1 and start % concurrency == 0:
+                    await self._prefetch(item["code"] for item in entries[start:start + concurrency])
                 entry_ref = replace(ref, item_index=offset) if cursor is None else ref
                 code = entry["code"]
                 await self.add_post(code, entry_ref, profile=name, listing=entry, profile_id=profile_id)
@@ -436,6 +448,14 @@ class _DiscoveryRun:
             if not page.cursor:
                 return None
             cursor, offset = page.cursor, 0
+            if newest_limit is not None:
+                recent = [
+                    video for video in self.videos.values()
+                    if video.metadata.pinned is False and video.metadata.published_at is not None
+                    and not _filter(video, filters, self.context.now)
+                ]
+                if len(recent) >= newest_limit:
+                    return replace(position, profile_cursor=cursor, profile_offset=0, profile_id=profile_id)
 
 
 async def discover(
@@ -446,6 +466,11 @@ async def discover(
     start = continuation.source_index if continuation else 0
     if not plan.valid_options:
         return Discovery((), plan.outcomes, (), 0, None)
+    newest_limit = plan.options.max_results if (
+        len(plan.sources) == 1 and not plan.options.new_reels_only and plan.filters.sort == "newest"
+    ) else None
+    prefetched_until = start
+    concurrency = context.discovery_concurrency
     for index, source in enumerate(plan.sources[start:], start):
         position = continuation if index == start and continuation else DiscoveryCursor(index)
         if context.expired():
@@ -453,7 +478,7 @@ async def discover(
             break
         ref, value = source.ref, source.value
         if source.kind == "profile":
-            cursor = await run.profile(value, ref, position)
+            cursor = await run.profile(value, ref, position, newest_limit=newest_limit, filters=plan.filters)
             if cursor is not None:
                 break
         elif source.kind == "dataset":
@@ -466,6 +491,13 @@ async def discover(
         elif source.kind == "cdn":
             run.standalone(value, ref)
         else:
+            if concurrency > 1 and index >= prefetched_until:
+                prefetched_until = index + concurrency
+                codes = (
+                    item.value if item.kind == "shortcode" else post_shortcode(item.value)
+                    for item in plan.sources[index:prefetched_until] if item.kind in {"shortcode", "post"}
+                )
+                await run._prefetch(code for code in codes if code)
             await run.add_post(value, ref, is_url=source.kind == "post")
 
     videos, skipped = [], []

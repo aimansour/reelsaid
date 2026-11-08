@@ -12,10 +12,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$workspace/package/scripts"
-cp -R .actor src Dockerfile .dockerignore pyproject.toml uv.lock "$workspace/package/"
-cp scripts/install-quality-models "$workspace/package/scripts/"
-apify actors push --dir "$workspace/package" --no-apply-env-vars-to-build --wait-for-finish 300 --json
+bash scripts/deploy-actor.sh
 apify api GET "acts/$actor" >"$workspace/actor.json"
 jq -e '.data.isPublic == false and (.data.taggedBuilds.latest.buildId | length > 0)' "$workspace/actor.json"
 

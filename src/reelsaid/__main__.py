@@ -52,6 +52,8 @@ async def main() -> None:
         plan = parse_input(raw)
         cloud = env["is_at_home"]
         state, provider, groq = None, None, None
+        concurrency = 1
+        measure = environ.get("REELSAID_BENCHMARK") == "1"
         pricing = RunPricing(RunBudget(env["max_total_charge_usd"]), PROPOSED_BASE["FREE"], PROPOSED_MINUTE, False)
         client = ApifyClientAsync(token=env["token"], api_url=env["api_base_url"], max_retries=0)
         if not cloud:
@@ -66,10 +68,14 @@ async def main() -> None:
                     raise BillingError("Run pricing is unavailable")
                 pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"])
                 provider = ApifyCharges(scoped_run) if pricing.charges_enabled else None
+                memory = details.options.memory_mbytes
+                concurrency = 4 if memory >= 512 else 2 if memory >= 256 else 1
                 state = await State.open(Actor.apify_client, env["user_id"], env["run_id"])
                 if keys := environ.get("REELSAID_GROQ_KEYS"):
                     accounts = load_accounts(keys, environ.get("REELSAID_GROQ_LIMITS", "{}"))
-                    groq = GroqAdapter(GroqTransport(provider_http), GroqPool(accounts, rotation_seed=env["run_id"]))
+                    groq = GroqAdapter(
+                        GroqTransport(provider_http), GroqPool(accounts, rotation_seed=env["run_id"], measure=measure),
+                    )
             except (ApifyClientError, BillingError, StateUnavailable, StateAccessError, ValueError):
                 await Actor.fail(status_message="Run configuration could not be verified.")
                 return
@@ -91,8 +97,10 @@ async def main() -> None:
             instagram=InstagramClient(web), apify=Actor.apify_client, now=datetime.now(UTC),
             expired=lambda: remaining_seconds() == 0, remaining_seconds=remaining_seconds,
             media_client=MediaClient(web), groq=groq, state=state, output=output, pricing=pricing,
-            provider=provider, read_previous=output.read,
+            provider=provider, read_previous=output.read, concurrency=concurrency, discovery_concurrency=concurrency,
         ))
+        if measure and groq is not None:
+            await output.put("REELSAID_METRICS", {"models": groq.pool.measurements, "workers": concurrency})
         message = f"{summary.successful} transcribed, {summary.partial} partial, {summary.failed + summary.input_errors} failed"
         if summary.stop_reason:
             message += f". {summary.stop_reason}"

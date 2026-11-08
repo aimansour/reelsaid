@@ -160,7 +160,7 @@ def _delay(raw: str | None) -> float | None:
 
 
 class GroqPool:
-    def __init__(self, accounts: list[GroqAccount], *, clock=monotonic, rotation_seed: str = ""):
+    def __init__(self, accounts: list[GroqAccount], *, clock=monotonic, rotation_seed: str = "", measure: bool = False):
         self.accounts = tuple(accounts)
         self.clock = clock
         self._lock = asyncio.Lock()
@@ -172,6 +172,7 @@ class GroqPool:
             first = int.from_bytes(digest) % len(accounts)
         self._next = dict.fromkeys(MODELS, first)
         self._disabled: set[str] = set()
+        self.measurements: dict[str, dict[str, int]] | None = {} if measure else None
 
     async def reserve(
         self, models: tuple[str, ...], seconds: int, *, exclude: set[tuple[str, str]] | None = None,
@@ -203,7 +204,7 @@ class GroqPool:
                     return Reservation(account, model, usage), 0
             return None, next_wait
 
-    async def observe(self, reservation: Reservation, response: ProviderResponse) -> None:
+    async def observe(self, reservation: Reservation, response: ProviderResponse, *, mode: str = "url") -> None:
         async with self._lock:
             now = self.clock()
             account = reservation.account.name
@@ -212,6 +213,15 @@ class GroqPool:
                 self._disabled.add(account)
             if response.status in {400, 401, 403, 413, 422, 429}:
                 reservation.usage.seconds = 0
+            if self.measurements is not None:
+                measured = self.measurements.setdefault(reservation.model, {})
+                fields = {
+                    "attempts": 1, mode: 1, f"http{response.status}": 1,
+                    "potentialBilledSeconds": reservation.usage.seconds,
+                    "acceptedBilledSeconds": reservation.usage.seconds if response.status == 200 else 0,
+                }
+                for key, amount in fields.items():
+                    measured[key] = measured.get(key, 0) + amount
             reset = _delay(response.headers.get("x-ratelimit-reset-requests"))
             remaining = response.headers.get("x-ratelimit-remaining-requests", "")
             if reset is not None and remaining.isdecimal():
@@ -398,7 +408,7 @@ class GroqAdapter:
             response = await self.transport.send(
                 reservation.account, reservation.model, url=url, file=file, language=language,
             )
-            await self.pool.observe(reservation, response)
+            await self.pool.observe(reservation, response, mode="url" if url else "upload")
             if response.status == 200 and (draft := _draft(response.payload, language)) is not None:
                 return Outcome("success", value=draft)
             if response.status == 429:

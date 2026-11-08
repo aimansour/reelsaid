@@ -40,6 +40,10 @@ def _result_key(video_id: str, options: TranscriptOptions) -> str:
     return _key("result-v1", video_id, options.language, str(options.prefer_captions), str(options.word_level_timestamps))
 
 
+def claim_slot(video_id: str) -> int:
+    return hashlib.sha256(video_id.encode()).digest()[0] % CLAIM_SHARDS
+
+
 @dataclass(frozen=True)
 class Lease:
     video_id: str
@@ -183,7 +187,7 @@ class State:
             raise StateAccessError("State belongs to a different run")
         if baseline is not None and options is None:
             raise ValueError("Refresh coordination requires transcript options")
-        slot = hashlib.sha256(video_id.encode()).digest()[0] % CLAIM_SHARDS
+        slot = claim_slot(video_id)
         guard = self._guards.setdefault(slot, asyncio.Lock())
         try:
             async with guard:

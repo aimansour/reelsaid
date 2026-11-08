@@ -11,7 +11,7 @@ from typing import Protocol
 
 from apify_client.errors import ApifyClientError
 
-from .billing import BillingError, ChargeProvider, ChargeReceipt, RunPricing, Settlement, free_receipt
+from .billing import BillingError, ChargeProvider, ChargeReceipt, ChargeQuote, RunBudget, RunPricing, Settlement, free_receipt
 from .contracts import CaptionCandidate, InputRef, JsonObject, Outcome, RunContext, TranscriptOptions, VideoMetadata, VideoRef
 from .discovery import DiscoveryCursor, discover
 from .input import parse_input
@@ -20,7 +20,7 @@ from .output import (
     SUMMARY_KEY, BillingFields, Continuation, RunSummary, SubtitleFiles, subtitle_files, subtitle_records, summarize, to_row,
 )
 from .quality import TranscriptResult, evaluate_video
-from .state import DEFINITIVE_FREE, AnswerState, Checkpoint, Lease, State, StateUnavailable
+from .state import DEFINITIVE_FREE, AnswerState, Checkpoint, Lease, State, StateUnavailable, claim_slot
 
 
 class Output(Protocol):
@@ -43,6 +43,63 @@ class ActorContext(RunContext):
     remaining_seconds: Callable[[], float | None] = lambda: None
     read_previous: Callable[[str], Awaitable[list[JsonObject]]] | None = None
     claim_wait_seconds: float = 3.0
+    concurrency: int = 1
+
+
+class _Order:
+    def __init__(self):
+        self.next = 0
+        self.finished: set[int] = set()
+        self.changed = asyncio.Event()
+
+    async def wait(self, index: int) -> None:
+        while index > self.next:
+            await self.changed.wait()
+
+    def finish(self, index: int) -> None:
+        if index < self.next:
+            return
+        self.finished.add(index)
+        while self.next in self.finished:
+            self.finished.remove(self.next)
+            self.next += 1
+        previous = self.changed
+        self.changed = asyncio.Event()
+        previous.set()
+
+
+class _Batch:
+    def __init__(self, budget: RunBudget):
+        self.budget = budget
+        self.admission = _Order()
+        self.delivery = _Order()
+        self.changed = asyncio.Event()
+        self.cutoff: int | None = None
+
+    async def reserve(self, index: int, cost: ChargeQuote | None):
+        await self.admission.wait(index)
+        try:
+            while self.cutoff is None and cost is not None:
+                decision = self.budget.reserve(cost)
+                if decision.status == "waiting":
+                    await self.changed.wait()
+                elif decision.reservation:
+                    return decision.reservation
+                else:
+                    self.cutoff = index
+        finally:
+            self.admission.finish(index)
+        return None
+
+    def notify_budget(self) -> None:
+        previous = self.changed
+        self.changed = asyncio.Event()
+        previous.set()
+
+    def finish(self, index: int) -> None:
+        self.admission.finish(index)
+        self.delivery.finish(index)
+        self.notify_budget()
 
 
 def _encode_video(video: VideoRef) -> JsonObject:
@@ -218,7 +275,11 @@ class _Run:
             Outcome(row["status"], row["errorCode"], row["retryable"]), seen_at=when,
         )
 
-    async def _deliver(self, row: JsonObject) -> JsonObject:
+    async def _deliver(self, row: JsonObject, batch: _Batch, index: int) -> JsonObject | None:
+        batch.admission.finish(index)
+        await batch.delivery.wait(index)
+        if batch.cutoff is not None and index > batch.cutoff:
+            return None
         if row["errorCode"] in {"SPEND_LIMIT", "TIME_LIMIT", "BILLING_UNRESOLVED"}:
             return row
         await self._push(row)
@@ -264,29 +325,31 @@ class _Run:
             if not await self.state.renew(lease):
                 return
 
-    async def _work(self, ref: VideoRef, media: MediaPlan | None = None) -> JsonObject | None:
+    async def _work(self, ref: VideoRef, batch: _Batch, index: int, media: MediaPlan | None = None) -> JsonObject | None:
         state, options = self.state, self.options.transcript
         answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
         if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
-            return await self._skip_answered(ref, answer)
+            return await self._skip_answered(ref, answer, batch, index)
         baseline = await state.lookup(state.tenant_id, ref.video_id, options)
         reusable = baseline.reusable and not self.options.force_refresh and baseline.successful.payload.get("runId") != state.run_id
         if reusable and answer.answered:
-            return await self._deliver(await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True))
+            row = await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True)
+            return await self._deliver(row, batch, index)
         wait_until = monotonic() + self.context.claim_wait_seconds
         while True:
             claim = await state.acquire(ref.video_id, state.run_id, options=options, baseline=baseline)
             if claim.error_code == "RESULT_AVAILABLE":
                 answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
                 if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
-                    return await self._skip_answered(ref, answer)
+                    return await self._skip_answered(ref, answer, batch, index)
                 result = (await state.lookup(state.tenant_id, ref.video_id, options)).result
-                return await self._deliver(await self._render(ref, result.payload, free_receipt(), answer, cached=result.status == "success"))
+                row = await self._render(ref, result.payload, free_receipt(), answer, cached=result.status == "success")
+                return await self._deliver(row, batch, index)
             if claim.value or monotonic() >= wait_until or self.context.expired():
                 break
             await asyncio.sleep(0.1)
         if not claim.value:
-            return await self._deliver(to_row(ref, claim, BillingFields()))
+            return await self._deliver(to_row(ref, claim, BillingFields()), batch, index)
         lease = claim.value
         heartbeat = asyncio.create_task(self._heartbeat(lease))
         actual = None
@@ -294,9 +357,10 @@ class _Run:
         try:
             answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
             if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
-                return await self._skip_answered(ref, answer)
+                return await self._skip_answered(ref, answer, batch, index)
             if reusable:
-                return await self._deliver(await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True))
+                row = await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True)
+                return await self._deliver(row, batch, index)
             settlement = Settlement(state, self.context.provider, self.context.pricing.budget, options=options)
             staged = await state.load_stage(lease, options)
             if staged and (staged["claimId"] != baseline.revision or staged["runId"] == state.run_id):
@@ -307,7 +371,8 @@ class _Run:
                 origin = staged["runId"] if staged["runId"] != state.run_id else None
                 if origin and receipt.charged is not None:
                     receipt = free_receipt()
-                return await self._deliver(await self._render(ref, payload, receipt, answer, billing_origin=origin))
+                row = await self._render(ref, payload, receipt, answer, billing_origin=origin)
+                return await self._deliver(row, batch, index)
             if media is None:
                 try:
                     async with asyncio.timeout(self.context.remaining_seconds()):
@@ -316,10 +381,11 @@ class _Run:
                     inspected = Outcome("deferred", "TIME_LIMIT", True)
                 media = inspected.value
                 if media is None:
-                    return await self._deliver(to_row(ref, inspected, BillingFields()))
+                    return await self._deliver(to_row(ref, inspected, BillingFields()), batch, index)
             actual = replace(media.ref, metadata=replace(media.ref.metadata, duration_seconds=float(media.duration_seconds)))
             if actual.video_id == lease.video_id:
-                return await self._deliver(await self._evaluate(actual, media, lease, settlement, answer))
+                row = await self._evaluate(actual, media, lease, settlement, answer, batch, index)
+                return await self._deliver(row, batch, index)
         finally:
             heartbeat.cancel()
             with suppress(asyncio.CancelledError, StateUnavailable):
@@ -332,55 +398,89 @@ class _Run:
             if actual.video_id in self.completed:
                 self.duplicates += 1
                 return None
-            return await self._work(actual, media)
+            return await self._work(actual, batch, index, media)
         finally:
             if owns_media:
                 media.close()
 
-    async def _skip_answered(self, ref: VideoRef, answer: AnswerState) -> JsonObject:
-        self.previous += 1
-        return await self._deliver(to_row(
+    async def _skip_answered(self, ref: VideoRef, answer: AnswerState, batch: _Batch, index: int) -> JsonObject | None:
+        row = await self._deliver(to_row(
             ref, Outcome("skipped", "ALREADY_ANSWERED"), BillingFields(), is_new=False,
             first_seen_at=answer.first_seen_at, first_seen_run_id=answer.first_seen_run_id,
-        ))
+        ), batch, index)
+        if row:
+            self.previous += 1
+        return row
 
-    async def _evaluate(self, ref, media, lease, settlement, answer) -> JsonObject:
+    async def _evaluate(self, ref, media, lease, settlement, answer, batch: _Batch, index: int) -> JsonObject:
         duration = media.duration_seconds
         filters, options = self.plan.filters, self.options.transcript
         if filters.max_duration_seconds is not None and duration > Decimal(str(filters.max_duration_seconds)):
             return to_row(ref, Outcome("skipped", "DURATION_LIMIT"), BillingFields())
         if filters.min_duration_seconds is not None and duration < Decimal(str(filters.min_duration_seconds)):
             return to_row(ref, Outcome("skipped", "BELOW_MIN_DURATION"), BillingFields())
-        reservation = None
         budget = self.context.pricing.budget
-        if media.audio:
-            decision = budget.reserve(self.context.pricing.quote(duration))
-            if not decision.reservation:
-                code = "BILLING_UNRESOLVED" if budget.blocked else "SPEND_LIMIT"
-                return to_row(ref, Outcome("deferred", code, True), BillingFields())
-            reservation = decision.reservation
+        reservation = await batch.reserve(index, self.context.pricing.quote(duration) if media.audio else None)
+        if batch.cutoff is not None and index >= batch.cutoff:
+            code = "BILLING_UNRESOLVED" if budget.blocked else "SPEND_LIMIT"
+            return to_row(ref, Outcome("deferred", code, True), BillingFields())
+        charging = False
         try:
-            async with asyncio.timeout(self.context.remaining_seconds()):
-                outcome = await self.context.evaluate(media, options, self.context)
-        except TimeoutError:
-            outcome = Outcome("deferred", "TIME_LIMIT", True)
-        payload = {**_payload(ref, outcome, options), "runId": self.state.run_id}
-        receipt = free_receipt()
-        if outcome.status not in {"success", "partial", "skipped"}:
+            try:
+                async with asyncio.timeout(self.context.remaining_seconds()):
+                    outcome = await self.context.evaluate(media, options, self.context)
+            except TimeoutError:
+                outcome = Outcome("deferred", "TIME_LIMIT", True)
+            payload = {**_payload(ref, outcome, options), "runId": self.state.run_id}
+            if outcome.status not in {"success", "partial", "skipped"}:
+                return payload["row"]
+            if not await self.state.stage(lease, options, payload):
+                raise StateUnavailable("Result ownership was lost before delivery")
+            receipt = free_receipt()
             if reservation:
-                budget.release(reservation)
-            return payload["row"]
-        if not await self.state.stage(lease, options, payload):
-            raise StateUnavailable("Result ownership was lost before delivery")
-        if reservation:
-            if outcome.value and outcome.value.billable:
-                receipt = await settlement.settle(lease, reservation)
-            else:
-                budget.release(reservation)
-        row = await self._render(ref, payload, receipt, answer)
-        if not await self.state.commit(lease, options, outcome.status, payload):
-            raise StateUnavailable("Result ownership was lost before delivery")
-        return row
+                if outcome.value and outcome.value.billable:
+                    charging = True
+                    receipt = await settlement.settle(lease, reservation)
+                else:
+                    budget.release(reservation)
+                reservation = None
+                batch.notify_budget()
+            row = await self._render(ref, payload, receipt, answer)
+            if not await self.state.commit(lease, options, outcome.status, payload):
+                raise StateUnavailable("Result ownership was lost before delivery")
+            return row
+        finally:
+            if reservation:
+                if charging:
+                    budget.blocked = True
+                else:
+                    budget.release(reservation)
+                batch.notify_budget()
+
+    async def _entry(self, ref: VideoRef, batch: _Batch, index: int) -> tuple[JsonObject | None, str | None]:
+        try:
+            row = await self._work(ref, batch, index)
+            code = row["errorCode"] if row else None
+            return row, code if code in {"SPEND_LIMIT", "TIME_LIMIT", "BILLING_UNRESOLVED"} else None
+        except (ApifyClientError, BillingError, StateUnavailable):
+            return None, "DELIVERY_INTERRUPTED"
+        finally:
+            batch.finish(index)
+
+    def _next_batch(self, selected: int) -> list[VideoRef]:
+        count = max(1, self.context.concurrency)
+        if self.options.max_results is not None:
+            count = min(count, self.options.max_results - selected)
+        batch, slots = [], set()
+        for ref in self.remaining[:count]:
+            slot = claim_slot(ref.video_id)
+            if slot in slots or batch and ref.video_id.startswith("cdn:"):
+                break
+            batch.append(ref)
+            slots.add(slot)
+            if ref.video_id.startswith("cdn:"):
+                break
+        return batch
 
     async def execute(self) -> RunSummary:
         requested = self.options.resume_from_dataset_id
@@ -402,28 +502,35 @@ class _Run:
                 if self.options.max_results is not None and selected >= self.options.max_results:
                     self.stop_reason = "RESULT_LIMIT"
                     break
-                ref = self.remaining[0]
-                try:
-                    row = await self._work(ref)
-                    if row and row["errorCode"] in {"SPEND_LIMIT", "TIME_LIMIT", "BILLING_UNRESOLVED"}:
-                        self.stop_reason = row["errorCode"]
-                        break
-                    if row:
-                        if row["retryable"]:
-                            self.retry.append(ref)
-                        else:
-                            self._mark_completed(row)
-                            if ref.video_id != row["videoId"]:
-                                self.completed[ref.video_id] = self.completed[row["videoId"]]
-                        selected += row["errorCode"] != "ALREADY_ANSWERED"
-                except (ApifyClientError, BillingError, StateUnavailable):
-                    self.stop_reason = "DELIVERY_INTERRUPTED"
+                refs = self._next_batch(selected)
+                batch = _Batch(self.context.pricing.budget)
+                results = await asyncio.gather(*(self._entry(ref, batch, index) for index, ref in enumerate(refs)))
+                pending = []
+                for index, (ref, (row, stop)) in enumerate(zip(refs, results, strict=True)):
+                    if stop or (batch.cutoff is not None and index >= batch.cutoff):
+                        self.stop_reason = self.stop_reason or stop
+                        pending.append(ref)
+                        continue
+                    if row is None:
+                        continue
+                    if row["retryable"]:
+                        self.retry.append(ref)
+                    else:
+                        self._mark_completed(row)
+                        if ref.video_id != row["videoId"]:
+                            self.completed[ref.video_id] = self.completed[row["videoId"]]
+                    selected += row["errorCode"] != "ALREADY_ANSWERED"
+                self.remaining = [*pending, *self.remaining[len(refs):]]
+                if self.stop_reason:
                     break
-                self.remaining.pop(0)
                 await self._checkpoint()
         continuation = None
         if self.remaining or self.retry or self.retry_sources or self.source_cursor:
-            self.stop_reason = self.stop_reason or ("TIME_LIMIT" if self.context.expired() else "RETRYABLE_ITEMS")
+            if not self.stop_reason and self.context.expired():
+                self.stop_reason = "TIME_LIMIT"
+            if not self.stop_reason and self.source_cursor and self.options.max_results is not None:
+                self.stop_reason = "RESULT_LIMIT"
+            self.stop_reason = self.stop_reason or "RETRYABLE_ITEMS"
             remaining = None if self.source_cursor or self.retry_sources else len(self.remaining) + len(self.retry)
             continuation = Continuation(self.output.dataset_id, remaining, self.stop_reason)
         if continuation or fresh or requested:

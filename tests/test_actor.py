@@ -138,7 +138,7 @@ def test_api_input_and_store_prefill():
 def test_ordered_budget_stop_and_resume():
     async def check():
         case = Case()
-        initial = case.context("first", cap=Decimal("0.024"))
+        initial = replace(case.context("first", cap=Decimal("0.024")), concurrency=3)
         summary = await run({"shortcodes": [SHORT, LONG, NEXT]}, initial)
         assert summary.stop_reason == "SPEND_LIMIT"
         assert case.asr_calls == [SHORT]
@@ -150,6 +150,29 @@ def test_ordered_budget_stop_and_resume():
         assert done.billed == 2 and case.asr_calls == [SHORT, LONG, NEXT]
         assert done.completed_dataset_ids == ("first",)
         assert len(initial.provider.calls) == 1 and len(resumed.provider.calls) == 3
+    asyncio.run(check())
+
+
+def test_batch_overlaps_transcription_with_ordered_delivery():
+    async def check():
+        case = Case()
+        both_admitted = asyncio.Event()
+        started = []
+
+        async def evaluate(media, options, context):
+            started.append(media.video_id)
+            if len(started) == 2:
+                both_admitted.set()
+            await asyncio.wait_for(both_admitted.wait(), timeout=1)
+            if media.video_id == SHORT:
+                await asyncio.sleep(0.02)
+            return await case.evaluate(media, options, context)
+
+        context = replace(case.context("overlap", cap=Decimal("0.027")), concurrency=2, evaluate=evaluate)
+        result = await run({"shortcodes": [SHORT, LONG]}, context)
+        assert result.successful == result.billed == 2
+        assert started == [SHORT, LONG]
+        assert [row["videoId"] for row in context.output.rows] == [SHORT, LONG]
     asyncio.run(check())
 
 
@@ -171,6 +194,33 @@ def test_watchlist_first_and_later_runs():
         assert case.inspect_calls == [NEXT]
         answered = next(row for row in second.output.rows if row["videoId"] == SHORT)
         assert answered["isNew"] is False and answered["firstSeenRunId"] == "first"
+    asyncio.run(check())
+
+
+def test_bounded_newest_profile_defers_older_pages_for_resume():
+    async def check():
+        case = Case()
+        pages = []
+
+        async def profile(username, cursor):
+            pages.append(cursor)
+            if cursor:
+                return ProfilePage("1", ({"code": NEXT, "clips_tab_pinned_user_ids": []},))
+            return ProfilePage("1", tuple(
+                {"code": code, "clips_tab_pinned_user_ids": []} for code in (SHORT, LONG)
+            ), ("profile", "next"))
+
+        case.instagram.profile = profile
+        first = case.context("first")
+        summary = await run({"profiles": ["public.personal"], "maxResults": 2}, first)
+        assert pages == [None]
+        assert summary.stop_reason == "RESULT_LIMIT" and summary.continuation.remaining is None
+        assert [row["videoId"] for row in first.output.rows] == [SHORT, LONG]
+        second = case.context("second")
+        resumed = await run({"resumeFromDatasetId": "first"}, second)
+        assert pages == [None, ("profile", "next")]
+        assert resumed.successful == 1 and resumed.continuation is None
+        assert [row["videoId"] for row in second.output.rows] == [NEXT]
     asyncio.run(check())
 
 
