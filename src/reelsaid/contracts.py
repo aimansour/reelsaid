@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 if TYPE_CHECKING:
     from apify_client import ApifyClientAsync
 
+    from .groq import GroqAdapter
     from .instagram import InstagramClient
     from .media import MediaClient
 
@@ -127,3 +128,4 @@ class RunContext:
     now: datetime
     expired: Callable[[], bool]
     media_client: MediaClient | None = None
+    groq: GroqAdapter | None = None

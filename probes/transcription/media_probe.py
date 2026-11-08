@@ -93,6 +93,15 @@ def voiced_fraction(path):
 
 
 def main():
+    input_path = f"https://api.apify.com/v2/key-value-stores/{os.environ['APIFY_DEFAULT_KEY_VALUE_STORE_ID']}/records/INPUT"
+    with urlopen(Request(input_path, headers={"Authorization": f"Bearer {os.environ['APIFY_TOKEN']}"}), timeout=8) as payload:
+        mode = json.load(payload).get("mode")
+    if mode == "adapter":
+        import asyncio
+        from adapter_probe import main as adapter_main
+
+        asyncio.run(adapter_main())
+        return
     keys = json.loads(os.environ["REELSAID_GROQ_KEYS"])
     session = requests.Session(impersonate="chrome", trust_env=False)
     root = session.get(BASE + "/", timeout=8)
@@ -106,9 +115,6 @@ def main():
         emit({"case": "acquisition", "shortResolved": False})
         return
     emit({"case": "acquisition", "shortResolved": True, "spanishResolved": bool(spanish), "quietResolved": bool(quiet)})
-    input_path = f"https://api.apify.com/v2/key-value-stores/{os.environ['APIFY_DEFAULT_KEY_VALUE_STORE_ID']}/records/INPUT"
-    with urlopen(Request(input_path, headers={"Authorization": f"Bearer {os.environ['APIFY_TOKEN']}"}), timeout=8) as payload:
-        mode = json.load(payload).get("mode")
     if mode == "expiry":
         expired = re.sub(r"([?&]oe=)[0-9a-fA-F]+", r"\g<1>64A00000", short, count=1)
         assert expired != short
