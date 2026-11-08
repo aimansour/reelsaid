@@ -75,17 +75,25 @@ def describe(response, target_code=None):
     children = target.get("carousel_media") or []
     variants = target.get("video_versions") or []
     media = variants[0].get("url") if variants and isinstance(variants[0], dict) else None
-    media_probe = None
-    if media and (urlparse(media).hostname or "").endswith((".cdninstagram.com", ".fbcdn.net")):
+    def verify_cdn(url):
+        if not url or not (urlparse(url).hostname or "").endswith((".cdninstagram.com", ".fbcdn.net")):
+            return None
         try:
-            with closing(requests.get(media, headers={"Range": "bytes=0-1023"}, stream=True, timeout=6)) as cdn:
-                media_probe = {"http": cdn.status_code, "contentType": cdn.headers.get("content-type")}
+            with closing(requests.get(url, headers={"Range": "bytes=0-1023"}, stream=True, timeout=6)) as cdn:
+                return {"http": cdn.status_code, "contentType": cdn.headers.get("content-type")}
         except requests.RequestsError as exc:
-            media_probe = {"error": type(exc).__name__}
+            return {"error": type(exc).__name__}
+    publisher = target.get("user") or target.get("owner") or {}
+    coauthors = target.get("coauthor_producers") or []
     return {
+        "targetPublisher": publisher.get("username") if target else None,
+        "targetCoauthors": [c.get("username") for c in coauthors if isinstance(c, dict)],
+        "targetChildChecks": [{"position": i, "id": c.get("pk") or c.get("id"),
+                               "http": (verify_cdn(c["video_versions"][0].get("url")) or {}).get("http")}
+                              for i, c in enumerate(children) if isinstance(c, dict) and c.get("video_versions")],
         "targetVideoVariants": len(variants),
         "targetVideoChildren": sum(bool(c.get("video_versions")) for c in children if isinstance(c, dict)),
-        "targetCdnProbe": media_probe,
+        "targetCdnProbe": verify_cdn(media),
         "listingAnchors": len(set(re.findall(r"/(?:reel|p)/([A-Za-z0-9_-]{8,16})/", text))),
         "profileNode": bool(keys & {"xig_user_by_username", "polaris_ordered_timeline_connection"}),
         "profileHints": {k: bool(re.search(r'["\']' + k + r'["\']', text))
@@ -181,6 +189,11 @@ def main():
             {"media_id": media_id(code)}, lsd=lsd), code)
         fetch(f"media-web-{code}", lambda: session.get(
             f"{BASE}/api/v1/media/{media_id(code)}/info/", headers=BASE_HEADERS, timeout=8))
+    for code in ("CsuFa_Mga41", "DfaaAP7BvIu"):
+        post = f"{BASE}/p/{code}/"
+        fetch(f"post-graphql-{code}", lambda: graphql(
+            session, post, "27130156389949648", "PolarisLoggedOutDesktopWWWPostRootContentQuery",
+            {"media_id": media_id(code)}, lsd=lsd), code)
     for name in (PERSONAL, PROFILE):
         profile = f"{BASE}/{name}/"
         reels = profile + "reels/"
