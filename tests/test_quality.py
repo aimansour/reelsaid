@@ -68,6 +68,19 @@ def test_music_silence_and_speech():
     assert spoken.value.billable and "música" in spoken.value.text
 
 
+def test_verified_licensed_music_avoids_asr_while_mixed_speech_is_transcribed():
+    plan = media()
+    plan = replace(plan, ref=replace(
+        plan.ref, metadata=VideoMetadata(audio={"isOriginal": False}),
+        dash_audio_url="https://media.cdninstagram.com/audio.m4a",
+    ))
+    initial = draft((0, 9, "Audible mixed speech."), text="Audible mixed speech.")
+    music, calls = evaluate(plan, SpeechEvidence("music_only", confidence=.98), initial)
+    assert music.error_code == "MUSIC_ONLY" and calls == []
+    mixed, calls = evaluate(plan, SpeechEvidence("speech", ((0, 9),), .94), initial)
+    assert mixed.value.billable and calls == [None]
+
+
 def test_verification_uses_aligned_dash_track_and_rejects_unaligned_track(tmp_path, monkeypatch):
     async def check():
         sidecar = "https://media.cdninstagram.com/audio.m4a"

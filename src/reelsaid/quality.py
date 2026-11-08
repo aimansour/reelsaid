@@ -304,7 +304,9 @@ async def evaluate_video(
             source = "captions"
         else:
             draft = None
-    if draft is None and not media.audio.file:
+    audio_metadata = media.ref.metadata.audio or {}
+    licensed_track = media.ref.dash_audio_url and audio_metadata.get("isOriginal") is False
+    if draft is None and not (media.audio.file or licensed_track):
         initial = await asr(media, options, context)
         if initial.value is None:
             return Outcome(initial.status, initial.error_code, initial.retryable)

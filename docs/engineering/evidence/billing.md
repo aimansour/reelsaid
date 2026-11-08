@@ -14,6 +14,17 @@ The deterministic suite covers all provisional tiers and duration boundaries, fu
 
 ## Live test status
 
-The private test Actor `aimansour/reelsaid-billing-probe` completed run `u7svO7EbFuvJxC0Dn`. The cloud environment and run API both returned the submitted cap of $0.014. Apify refused to enable pay-per-event with HTTP 400 `cannot-monetize-without-payout-billing-info`. Without that configuration, the run's debit request was rejected with HTTP 405 `cannot-charge-non-pay-per-event-actor`. Steadyfetch's settled comparison run `MNKmRNx4ahyfGY2Sw` did expose event counts and $0.015 of charged usage. ReelSaid's accepted debits and same-key replay remain pending the account's payout setup. This private probe has no production pricing effects. [Payout setup](https://docs.apify.com/actors/monetize/monthly-payouts)
+The private test Actor `aimansour/reelsaid-billing-probe` completed run `u7svO7EbFuvJxC0Dn`. The cloud environment and run API both returned the submitted cap of $0.014. At that point Apify refused to enable pay-per-event with HTTP 400 `cannot-monetize-without-payout-billing-info`. Without that configuration, the run's debit request was rejected with HTTP 405 `cannot-charge-non-pay-per-event-actor`. Steadyfetch's settled comparison run `MNKmRNx4ahyfGY2Sw` exposed event counts and $0.015 of charged usage. [Payout setup](https://docs.apify.com/actors/monetize/monthly-payouts)
 
 The trusted public workflow reproduced the $0.018 cap and expected account rejection in private run `gq9ovdPwYPsFkTS4a`. A separate verification run passed the 50-test suite and all four schemas. [Cloud workflow](https://github.com/aimansour/reelsaid/actions/runs/42462243029) · [Verification workflow](https://github.com/aimansour/reelsaid/actions/runs/42462242961)
+
+## Paid event API after payout setup
+
+After the owner completed payout setup, Apify enabled tiered pricing on the private probe. The actual run snapshot omitted the platform-usage configuration flag and included the effective tier table. The production loader accepts the run shape and validates the event set, prices, and cap. The private pricing configuration explicitly leaves platform usage out of customer events.
+
+| Private run | Observed result |
+| --- | --- |
+| `FB03qEwzcgbZwJljF` | The runtime quoted $0.018 for 241 seconds and admitted it at the exact cap. Repeating the base event with the same key produced one accepted transcript event and two accepted additional-minute events. |
+| `P0yyAt8xOgTrEOJcq` | The production settlement module wrote two durable results and intentionally dropped the second successful acknowledgement. Both receipts settled at $0.012, the journal held two confirmed base events with no pending claim, and Apify reported exactly two base events. |
+
+The run API counters can lag successful responses. The protected run journal preserves acknowledged cumulative event totals and the active debit before a retry or restart. This prevents a delayed count from the previous video from confirming a new video. These were owner-run platform tests. Apify accepted the events and reported zero externally accounted events for these runs. [Live billing verification](https://github.com/aimansour/reelsaid/actions/runs/42482027955)
