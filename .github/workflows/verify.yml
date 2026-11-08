@@ -11,7 +11,7 @@ on:
         description: Verification to run
         required: true
         type: choice
-        options: [pass, fail, run]
+        options: [pass, fail, run, cloud]
 
 permissions:
   contents: read
