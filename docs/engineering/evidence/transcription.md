@@ -20,3 +20,9 @@ Each successful first call reported a request limit of 2,000 and remaining count
 The probe credentials live in an encrypted Apify runtime environment variable with build-time access disabled. GitHub started the build and run through the existing deployment secret.
 
 Private Apify run `GVjRGOqNa4NxcN4Re` changed the URL expiry to a past value as a controlled access failure. Instagram CDN returned 403 and Groq reported `media_fetch_failed`. Resolving the original post again and retrying the refreshed URL returned HTTP 200 and 25 timed words. This proves the controlled recovery path. Keep the observed HTTP and provider errors separate from whether a stored link is known to have naturally expired.
+
+## Product adapter
+
+Public workflow `42444540220` ran the adapter in private Apify run `XnQHVT75KWedrFdph`. All six account and model pairs returned 25 timed words through the direct URL path. The six requests took 512 to 624 ms each. Spanish auto-detection and an explicit `es` hint preserved Spanish text. A deliberately stale signed URL failed at Groq. The adapter reused retained media, uploaded 309,707 bytes of mono FLAC from the 2,403,401-byte original, and recovered the full 25-word transcript.
+
+The local admission window tracks requests per minute and day and audio seconds per hour and day, independently for each organization and model. Use the published Free defaults for the measured accounts and support runtime overrides for account-specific allowances. An optional organization-wide budget applies when configured. A run-specific starting position distributes simultaneous cold runs across accounts. The provider remains the authority across runs, with response headers, cooldown, and a bounded wait feeding each run's scheduler. [Groq rate limits](https://console.groq.com/docs/rate-limits)

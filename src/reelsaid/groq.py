@@ -1,6 +1,7 @@
 """Groq transcription transport and organization/model quota admission."""
 
 import asyncio
+import hashlib
 import json
 import math
 import re
@@ -159,13 +160,17 @@ def _delay(raw: str | None) -> float | None:
 
 
 class GroqPool:
-    def __init__(self, accounts: list[GroqAccount], *, clock=monotonic):
+    def __init__(self, accounts: list[GroqAccount], *, clock=monotonic, rotation_seed: str = ""):
         self.accounts = tuple(accounts)
         self.clock = clock
         self._lock = asyncio.Lock()
         self._models = {(a.name, model): _Bucket(quota) for a in accounts for model, quota in a.models.items()}
         self._shared = {account.name: _Bucket(account.shared) for account in accounts if account.shared}
-        self._next = dict.fromkeys(MODELS, 0)
+        first = 0
+        if accounts and rotation_seed:
+            digest = hashlib.blake2s(rotation_seed.encode(), digest_size=4).digest()
+            first = int.from_bytes(digest) % len(accounts)
+        self._next = dict.fromkeys(MODELS, first)
         self._disabled: set[str] = set()
 
     async def reserve(

@@ -154,3 +154,23 @@ def test_invalid_key_is_disabled_for_both_models():
     assert [call[0] for call in calls.calls] == ["old", "healthy"]
     another, _ = asyncio.run(context.groq.pool.reserve((LARGE,), 10))
     assert another.account.name == "healthy"
+
+
+def test_observed_daily_window_blocks_only_its_model():
+    async def check():
+        clock = Clock()
+        pool = GroqPool([GroqAccount("one", "fake")], clock=clock)
+        turbo, _ = await pool.reserve((TURBO,), 10)
+        await pool.observe(turbo, ProviderResponse(200, {
+            "x-ratelimit-remaining-requests": "0",
+            "x-ratelimit-reset-requests": "1m2.5s",
+        }, transcript()))
+        blocked, wait = await pool.reserve((TURBO,), 10)
+        assert blocked is None and wait == 62.5
+        large, _ = await pool.reserve((LARGE,), 10)
+        assert large.model == LARGE
+        await clock.sleep(wait)
+        restored, _ = await pool.reserve((TURBO,), 10)
+        assert restored.model == TURBO
+
+    asyncio.run(check())
