@@ -47,7 +47,8 @@ run_actor cached "$(jq -c '.forceRefresh = false' <<<"$prefill")"
 jq -e 'length == 1 and .[0].status == "success" and .[0].cached == true and .[0].charged == false' "$workspace/cached-rows.json"
 run_actor budget "$prefill" '{"memory":512,"timeout":90,"waitForFinish":60,"maxTotalChargeUsd":0.011}'
 jq -e '.stopReason == "SPEND_LIMIT" and .continuation.remaining == 1 and .billed == 0' "$workspace/budget-summary.json"
-run_actor timed "$prefill" '{"memory":512,"timeout":10,"waitForFinish":40}'
+run_actor timed '{"profiles":["nasa"],"maxResults":12}' '{"timeout":10,"waitForFinish":40}'
+jq -e '.data.options.memoryMbytes == 2048' "$workspace/timed-run.json"
 jq -e '.stopReason == "TIME_LIMIT" and .continuation.reason == "TIME_LIMIT" and
     .successful == 0 and .billed == 0' "$workspace/timed-summary.json"
 

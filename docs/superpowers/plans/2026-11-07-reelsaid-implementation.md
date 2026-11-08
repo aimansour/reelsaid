@@ -284,25 +284,25 @@ The signatures below describe data and ownership across tasks. `TenantId`, `RunI
 - [ ] Verify the named cases on the candidate through API, Console prefill, and a native task/schedule. Check mixed batches, per-child billing, interruption, and result access with actual cloud storage.
 - [ ] Review and commit the verified Actor integration.
 
-### Task 14 — Optimize cloud performance and set evidence-based prices
+### Task 14 — Optimize cloud performance and measure pricing
 
 **Files** · Private `docs/engineering/evidence/performance.md`, `docs/engineering/decisions.md`, measured runtime and pricing configuration.
 
-**Consumes** · Task 02's benchmark and Task 13's cloud candidate. **Produces** · Selected run settings, measured economics, and prices for the release candidate.
+**Consumes** · Task 02's benchmark and Task 13's cloud candidate. **Produces** · Selected run settings and measured economics for the owner's launch pricing decision.
 
 - [ ] Run ReelSaid on comparable single, mixed, profile, and large-batch inputs. Compare it with Steadyfetch and the other relevant baselines for quality, metadata, first-result latency, throughput, and completion rate. Include English alongside a representative range of supported languages and scripts.
 - [ ] Test uncertainty that affects cost or reliability. Compare batch concurrency and resource allocation, URL versus transfer savings, state and storage overhead, quota scheduling, retries, and cold/warm behavior where the choice remains open. Track compute, data transfer, storage operations, build overhead, external ASR usage, and free or failed outcomes.
 - [ ] Calculate contribution using actual Apify payout rules and metered run and external costs. Report paid-tier margins and representative mixes including FREE-plan usage. [Apify pricing and costs](https://docs.apify.com/actors/monetize/pricing-and-costs)
-- [ ] Tune material gaps in quality, speed, reliability, and metadata against the comparable leader benchmarks. Present candidate prices and the measured margin to the owner for the final pricing decision.
-- [ ] Apply the selected settings and prices.
-- [ ] Run the applicable suites and representative Apify cloud cases with those settings. Confirm competitive performance and a positive contribution margin before packaging.
+- [ ] Tune material gaps in quality, speed, reliability, and metadata against the comparable leader benchmarks. Present candidate prices and measured margins. The owner will select final prices immediately before launch in Task 17.
+- [ ] Apply the selected runtime settings and keep the pricing evidence available for release.
+- [ ] Run the applicable suites and representative Apify cloud cases with those settings. Document comparative performance and the modeled contribution margin before packaging.
 - [ ] Commit the reproducible measurements and decisions.
 
 ### Task 15 — Create the public listing, brand, and workflow templates
 
 **Files** · Public `README.md`, `assets/reelsaid-logo.png`, `examples/api/{reel,profile,dataset,output}.json`, `examples/n8n/reelsaid.json`, `examples/make/reelsaid.blueprint.json`, `examples/zapier/README.md`. Private `.actor/input_schema.json` and sample/output configuration, suite `package`.
 
-**Consumes** · Verified schemas, example Reel, product results, and final pricing. **Produces** · Public packaging ready for Store, GitHub, native MCP, and automation users.
+**Consumes** · Verified schemas, example Reel, product results, and measured billing behavior. **Produces** · Public packaging ready for Store, GitHub, native MCP, and automation users. Final numerical prices follow the owner's decision in Task 17.
 
 - [ ] Draft the Store metadata, GitHub description and topics, README, and MCP-facing copy using search intent from Google, the Store, GitHub, and agent discovery. Cover input modes, filters, outputs, timestamp and subtitle usage, watchlists, resume, errors, billing, and the real prefill. Use the agreed brand strings and public Whisper Large-v3 description. Include a genuine sanitized sample output.
 - [ ] Create the ReelSaid logo and visually inspect it at Store icon size and in the listing composition. Export the supported PNG. Verify the brand is recognizable and the asset renders on the intended surfaces.
@@ -331,6 +331,6 @@ The signatures below describe data and ownership across tasks. `TenantId`, `RunI
 
 **Consumes** · Task 16's verified candidate. **Produces** · A live Store Actor, linked public repository, and recorded public verification.
 
-- [ ] Use the on-demand workflow to publish the verified candidate when requested. Check the private source setting, final pricing and build identity, and that the Store package matches the public revision.
+- [ ] Get the owner's final numerical prices, apply them, and verify the effective price table and spending cap on the private candidate. Use the on-demand workflow to publish when requested. Check the private source setting, final pricing and build identity, and that the Store package matches the public revision.
 - [ ] Verify the live Store URL and native API and MCP discovery, real prefill and Store test status, public example and template links, result and subtitle access, and public repository discoverability. Verify the periodic check is scheduled in the public repository. Inspect the published listing and brand asset as a visitor. [Apify publishing](https://docs.apify.com/actors/publishing/publish) · [Apify MCP quickstart](https://docs.apify.com/agents/quickstart)
 - [ ] Record the release, observed results, and links. Resolve regressions through the verified workflow and commit the release evidence.

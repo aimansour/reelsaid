@@ -41,3 +41,22 @@ The next campaign held the full continuous voice detector and refined defect tim
 The 20-video mixed batch delivered 14 qualified transcripts at both allocations. The 2048 MB run finished in 52.58 seconds compared with 94.88 seconds at 1024 MB. Settled Apify charges were $0.011325 and $0.010867 respectively. The run used $0.012195 of modeled paid ASR at both allocations. A six-Reel cloud case confirmed original-language results in English, Spanish, Arabic, and Japanese, with five qualified transcripts and one no-speech result.
 
 The legacy /tv/ source stopped under the $0.012 base-only budget and issued no ASR request. Its 894 KB MP4 index motivated the larger bounded range read used in the final verification. [Candidate benchmark](https://github.com/aimansour/reelsaid/actions/runs/42481497993)
+
+## Selected allocation and pricing evidence
+
+Eight ordered workers at 2048 MB delivered the 20-video batch in 39.42 seconds, compared with 52.58 seconds with four workers at the same memory. Both runs delivered 14 qualified videos. The eight-worker run received 12.33 MB and settled at $0.009710 on Apify. The same measured ASR work represents $0.012195 at paid Groq rates.
+
+The 12-Reel NASA profile finished in 35.16 seconds with nine qualified and three music-only outcomes. This is 3.69 seconds behind the measured Steadyfetch completion and 6.71 seconds behind its first text observation. Single-video observations varied across campaigns. They included a 6.55-second first text and later observations around 13 to 15 seconds. These observations do not support a universal speed claim.
+
+The larger range read brought the legacy /tv/ budget check from 139.18 MB received to 0.22 MB and cut observed wall time from 9.88 to 7.51 seconds. Both runs stopped before ASR.
+
+Use the low allocation for individual URLs and larger allocations for collections. Keep ordered admission and delivery independent of worker count. A known licensed soundtrack with aligned audio enters independent speech verification before a provider request. The music-only control issues no ASR call and the mixed-speech control still produces its transcript. [Allocation comparison](https://github.com/aimansour/reelsaid/actions/runs/42482268059)
+
+| Paid tier | Proposed first three minutes | Large-batch gross | Modeled contribution | Modeled contribution with 50% FREE traffic |
+| --- | ---: | ---: | ---: | ---: |
+| Bronze | $0.011 | $0.154 | $0.10130 | $0.04455 |
+| Silver | $0.010 | $0.140 | $0.09148 | $0.03964 |
+| Gold | $0.009 | $0.126 | $0.08145 | $0.03463 |
+| Platinum and Diamond | $0.0085 | $0.119 | $0.07330 | $0.03055 |
+
+The proposed FREE price is $0.012, and the proposed additional-minute price is $0.003. Reducing the first three minutes by $0.001 per tier would put the conservative Platinum and Diamond contribution for the same batch at about $0.06210, or 59.1% of gross. A three-minute video that requires both complete model passes has higher ASR costs than the sampled workload average. The owner will select final pricing immediately before release.
