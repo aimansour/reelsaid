@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 cd -- "$(dirname "$0")/.."
 umask 077
 
@@ -21,6 +21,7 @@ cleanup() {
     exit "$result"
 }
 trap cleanup EXIT
+trap 'printf "Release operation failed at line %s.\n" "$LINENO" >&2' ERR
 
 get_actor() {
     apify api GET "$actor" > "$scratch/actor.json"
@@ -43,7 +44,8 @@ check_build() {
     apify api GET "actor-builds/$1" > "$scratch/build.json"
     jq -e --arg actor "$(jq -er .data.id "$scratch/actor.json")" '.data |
         .actId == $actor and .status == "SUCCEEDED" and .options.useCache
-        and (.imageDigest | startswith("sha256:")) and (.inputSchema | length > 0)' "$scratch/build.json" >/dev/null
+        and (.imageDigest | test("^(sha256:)?[0-9a-f]{64}$"))
+        and (.inputSchema | length > 0)' "$scratch/build.json" >/dev/null
 }
 
 smoke() {
@@ -101,6 +103,11 @@ receipt="key-value-stores/$store/records/CANDIDATE"
 case "$mode" in
     candidate)
         stable_id=$(default_build)
+        if jq -e '.data.isPublic == false' "$scratch/actor.json" >/dev/null; then
+            jq -c '. + {isSourceCodeHidden:true,exampleRunInput:null}' "$PACKAGE_ROOT/store/listing.json" |
+                apify api PUT "$actor" -d - >/dev/null
+            get_actor
+        fi
         bash scripts/deploy-actor.sh "$PACKAGE_ROOT" candidate > "$scratch/deployment.json"
         build_id=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/deployment.json")
         [[ $(default_build) == "$stable_id" ]]
@@ -109,11 +116,11 @@ case "$mode" in
         smoke "$build_id" true
         fresh_run=$(jq -er .data.id "$scratch/run.json")
         build_number=$(jq -er .data.buildNumber "$scratch/build.json")
+        jq -ej .data.actorDefinition.readme "$scratch/build.json" | cmp - "$PACKAGE_ROOT/README.md"
         apify api GET "$actor/versions/0.1" > "$scratch/version.json"
         jq -e '.data.applyEnvVarsToBuild == false and .data.buildTag == "candidate" and
-            any(.data.envVars[]; .name == "REELSAID_GROQ_KEYS" and .isSecret == true)' "$scratch/version.json" >/dev/null
-        jq -ej '.data.sourceFiles[] | select(.name == ".actor/README.md") | .content' "$scratch/version.json" |
-            cmp - "$PACKAGE_ROOT/README.md"
+            any(.data.envVars[]; .name == "REELSAID_GROQ_KEYS" and .isSecret == true) and
+            all(.data.sourceFiles[]; .name | endswith(".pyc") | not)' "$scratch/version.json" >/dev/null
         reject_empty "$build_number"
         jq -cn --arg source "$source_revision" --arg package "$package_revision" --arg buildId "$build_id" \
             --arg build "$build_number" --arg firstRun "$first_run" --arg freshRun "$fresh_run" \

@@ -26,6 +26,7 @@ def test_deployment_stages_only_actor_files_and_approved_readme(tmp_path):
     assert (capture / ".actor/input_schema.json").is_file()
     assert (capture / "Dockerfile").is_file() and (capture / "uv.lock").is_file()
     assert (capture / "src/reelsaid/__main__.py").is_file()
+    assert all(path.suffix == ".py" for path in (capture / "src/reelsaid").iterdir())
     assert not (capture / ".git").exists() and not (capture / "docs").exists()
     assert not (capture / "other.txt").exists()
     arguments = (capture / "arguments.txt").read_text().splitlines()

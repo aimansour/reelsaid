@@ -323,6 +323,7 @@ The signatures below describe data and ownership across tasks. `TenantId`, `RunI
 - [ ] Verify Apify build cache behavior on successive builds of the selected Docker layout. Check the tested revision, final image, dependency and media tooling, and authorized runtime secrets. Exercise the trusted release workflow against a private candidate, including failed build and rollback behavior. Keep source and source-bearing Docker layers on authorized surfaces.
 - [ ] Run `./scripts/verify release` and the equivalent Store default-input test on the private candidate. Expect a genuine transcript in the default dataset within the Store's test window. Verify the conditions that support Reliability and Ease of use, native API/MCP and schedules, billing and resume, source visibility, and public logs/artifacts/caches. [Store testing](https://docs.apify.com/actors/publishing/test)
 - [ ] Record the evidence and get the Superpowers release review.
+- [ ] Keep the approved logo in the public package. The owner deferred uploading it as the Actor icon in Apify Console.
 - [ ] Commit the verified release workflow and evidence with the exact candidate identifiers.
 
 ### Task 17 — Publish the verified candidate on demand
@@ -332,5 +333,5 @@ The signatures below describe data and ownership across tasks. `TenantId`, `RunI
 **Consumes** · Task 16's verified candidate. **Produces** · A live Store Actor, linked public repository, and recorded public verification.
 
 - [ ] Get the owner's final numerical prices, apply them, and verify the effective price table and spending cap on the private candidate. Use the on-demand workflow to publish when requested. Check the private source setting, final pricing and build identity, and that the Store package matches the public revision.
-- [ ] Verify the live Store URL and native API and MCP discovery, real prefill and Store test status, public example and template links, result and subtitle access, and public repository discoverability. Verify the periodic check is scheduled in the public repository. Inspect the published listing and brand asset as a visitor. [Apify publishing](https://docs.apify.com/actors/publishing/publish) · [Apify MCP quickstart](https://docs.apify.com/agents/quickstart)
+- [ ] Verify the live Store URL and native API and MCP discovery, real prefill and Store test status, public example and template links, result and subtitle access, and public repository discoverability. Verify the periodic check is scheduled in the public repository. Inspect the published listing and public brand asset as a visitor. [Apify publishing](https://docs.apify.com/actors/publishing/publish) · [Apify MCP quickstart](https://docs.apify.com/agents/quickstart)
 - [ ] Record the release, observed results, and links. Resolve regressions through the verified workflow and commit the release evidence.

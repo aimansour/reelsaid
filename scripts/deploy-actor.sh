@@ -5,8 +5,10 @@ public_package=${1:-}
 build_tag=${2:-latest}
 package=$(mktemp -d)
 trap 'rm -rf -- "$package"' EXIT
-mkdir -p "$package/scripts"
-cp -R .actor src Dockerfile .dockerignore pyproject.toml uv.lock "$package/"
+mkdir -p "$package/.actor" "$package/scripts" "$package/src/reelsaid"
+cp .actor/*.json "$package/.actor/"
+cp src/reelsaid/*.py "$package/src/reelsaid/"
+cp Dockerfile .dockerignore pyproject.toml uv.lock "$package/"
 cp scripts/install-quality-models "$package/scripts/"
 if [[ -n $public_package ]]; then
     cp -- "$public_package/README.md" "$package/.actor/README.md"
