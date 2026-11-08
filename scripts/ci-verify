@@ -3,18 +3,22 @@ set -euo pipefail
 
 printf '%s\n' 'REELSAID_PRIVATE_CANARY_5f2499a3'
 printf '%s\n' 'REELSAID_PRIVATE_CANARY_5f2499a3' >&2
+ensure_uv() {
+    if ! command -v uv >/dev/null; then
+        uv_environment=$(mktemp -d)
+        trap 'rm -rf -- "$uv_environment"' EXIT
+        python3 -m venv "$uv_environment"
+        "$uv_environment/bin/pip" install --disable-pip-version-check uv==0.12.23
+        export PATH="$uv_environment/bin:$PATH"
+    fi
+}
+
 case "$1" in
     pass)
         npm exec --yes --package=apify-cli@1.11.0 -- apify actors ls --my --limit 1 --json
         ;;
     run)
-        if ! command -v uv >/dev/null; then
-            uv_environment=$(mktemp -d)
-            trap 'rm -rf -- "$uv_environment"' EXIT
-            python3 -m venv "$uv_environment"
-            "$uv_environment/bin/pip" install --disable-pip-version-check uv==0.12.23
-            export PATH="$uv_environment/bin:$PATH"
-        fi
+        ensure_uv
         if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
             sudo apt-get update -q
             sudo apt-get install -y --no-install-recommends ffmpeg
@@ -30,6 +34,12 @@ case "$1" in
         ;;
     account)
         npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-billing.sh
+        ;;
+    package)
+        : "${PACKAGE_ROOT:?The public checkout is required}"
+        ensure_uv
+        ./scripts/verify package
+        bash scripts/probe-package.sh
         ;;
     fail)
         exit 1

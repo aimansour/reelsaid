@@ -1,6 +1,6 @@
 {
     "title": "ReelSaid — Instagram Reels Transcript API",
-    "description": "Transcribe public Instagram Reels from links, profiles, shortcodes, media URLs, or an Apify dataset. Replace the prefilled spoken Reel with your own source, or keep it for a real test run. The prefill runs only when it is included in your input.",
+    "description": "Turn public Instagram Reels, video posts, carousels, and profiles into original-language transcripts, timed segments, three-second hooks, and SRT or WebVTT subtitles. Submit Reel links, shortcodes, Instagram media URLs, or an Apify dataset. Replace the prefilled spoken Reel or submit it explicitly to try ReelSaid.",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
@@ -139,7 +139,7 @@
         },
         "newReelsOnly": {
             "title": "Only unanswered Reels",
-            "description": "Start with currently eligible videos. Later runs of the same watchlist skip videos that already received a final result.",
+            "description": "Start with currently eligible videos. Your Apify account's answer history skips previously answered videos across watchlists.",
             "type": "boolean",
             "default": false
         },
@@ -151,7 +151,7 @@
         },
         "resumeFromDatasetId": {
             "title": "Resume from a prior run dataset",
-            "description": "Continue unfinished work from a previous ReelSaid run in your account. Completed and paid results remain available in the original run.",
+            "description": "Continue unfinished work from a previous ReelSaid run in your account. The run summary supplies this dataset ID. Completed results stay in their original datasets.",
             "type": "string",
             "editor": "resourcePicker",
             "resourceType": "dataset",
