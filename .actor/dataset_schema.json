@@ -1,7 +1,7 @@
 {
     "actorSpecification": 1,
     "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$schema": "http://json-schema.org/draft-07/schema#",
         "title": "ReelSaid result row",
         "description": "A video transcript or a structured outcome for an input. All rows use schema version 1.",
         "type": "object",
@@ -42,14 +42,14 @@
                 "example": "MEDIA_URL_EXPIRED"
             },
             "retryable": { "type": "boolean", "title": "Retryable", "description": "Whether the caller can retry the unresolved work.", "example": false },
-            "provenance": { "type": "array", "items": { "$ref": "#/$defs/input" }, "title": "Input provenance", "description": "Submitted fields and zero-based indices that led to this result." },
+            "provenance": { "type": "array", "items": { "$ref": "#/definitions/input" }, "title": "Input provenance", "description": "Submitted fields and zero-based indices that led to this result." },
             "transcript": { "type": ["string", "null"], "title": "Original-language transcript", "description": "Full spoken text. An empty string denotes verified absence of usable speech. Null means no transcript was resolved." },
             "language": { "type": ["string", "null"], "title": "Spoken language", "description": "The original language as an ISO code when recognized. Otherwise the detected language label, or null.", "example": "en" },
-            "durationSeconds": { "$ref": "#/$defs/nullableSeconds", "title": "Media duration in seconds", "example": 8.892 },
-            "wordCount": { "$ref": "#/$defs/nullableCount", "title": "Transcript word count", "description": "Counts timed words when available and Unicode word boundaries otherwise." },
-            "segments": { "type": "array", "items": { "$ref": "#/$defs/span" }, "title": "Timed transcript segments", "description": "Sentence timing when supported by word alignment, or the source's actual segment or caption timing." },
+            "durationSeconds": { "$ref": "#/definitions/nullableSeconds", "title": "Media duration in seconds", "example": 8.892 },
+            "wordCount": { "$ref": "#/definitions/nullableCount", "title": "Transcript word count", "description": "Counts timed words when available and Unicode word boundaries otherwise." },
+            "segments": { "type": "array", "items": { "$ref": "#/definitions/span" }, "title": "Timed transcript segments", "description": "Sentence timing when supported by word alignment, or the source's actual segment or caption timing." },
             "timingGranularity": { "enum": ["sentence", "segment", "cue", null], "title": "Timing granularity" },
-            "wordLevelTimestamps": { "type": ["array", "null"], "items": { "$ref": "#/$defs/span" }, "title": "Word-level timestamps", "description": "Timed words when requested and available, with the available timestamp precision." },
+            "wordLevelTimestamps": { "type": ["array", "null"], "items": { "$ref": "#/definitions/span" }, "title": "Word-level timestamps", "description": "Timed words when requested and available, with the available timestamp precision." },
             "hook": {
                 "type": ["object", "null"],
                 "title": "Opening three-second hook",
@@ -64,7 +64,7 @@
                 }
             },
             "transcriptSource": { "enum": ["asr", "captions", null], "title": "Transcript source", "description": "Whether speech recognition or timed original-language captions supplied the transcript." },
-            "metadata": { "$ref": "#/$defs/metadata", "title": "Instagram post and video metadata" },
+            "metadata": { "$ref": "#/definitions/metadata", "title": "Instagram post and video metadata" },
             "quality": {
                 "type": ["object", "null"],
                 "title": "Speech and coverage quality",
@@ -72,8 +72,8 @@
                 "additionalProperties": false,
                 "properties": {
                     "speechClassification": { "enum": ["speech", "silence", "music_only", "no_speech", "no_audio", "unknown"] },
-                    "speechConfidence": { "$ref": "#/$defs/nullableFraction" },
-                    "affectedFraction": { "$ref": "#/$defs/nullableFraction" },
+                    "speechConfidence": { "$ref": "#/definitions/nullableFraction" },
+                    "affectedFraction": { "$ref": "#/definitions/nullableFraction" },
                     "missingStart": { "type": ["boolean", "null"] },
                     "missingEnd": { "type": ["boolean", "null"] },
                     "missingInternal": { "type": ["boolean", "null"] },
@@ -99,18 +99,18 @@
                 "description": "Authenticated Apify record references for each generated subtitle format.",
                 "required": ["srt", "vtt"],
                 "additionalProperties": false,
-                "properties": { "srt": { "$ref": "#/$defs/file" }, "vtt": { "$ref": "#/$defs/file" } }
+                "properties": { "srt": { "$ref": "#/definitions/file" }, "vtt": { "$ref": "#/definitions/file" } }
             },
             "charged": { "type": ["boolean", "null"], "title": "Charged", "description": "Whether this row was charged. Null denotes a charge whose final state is unresolved." },
-            "billedMinutes": { "$ref": "#/$defs/nullableCount", "title": "Billed minutes", "description": "Started minutes covered by confirmed charges." },
-            "chargedEvents": { "$ref": "#/$defs/events", "title": "Confirmed charged events" },
+            "billedMinutes": { "$ref": "#/definitions/nullableCount", "title": "Billed minutes", "description": "Started minutes covered by confirmed charges." },
+            "chargedEvents": { "$ref": "#/definitions/events", "title": "Confirmed charged events" },
             "confirmedChargeUsd": { "type": ["number", "null"], "minimum": 0, "title": "Confirmed charge in USD" },
             "cached": { "type": "boolean", "title": "Cached result", "description": "True when the transcript was reused from a previous delivery.", "example": false },
             "isNew": { "type": ["boolean", "null"], "title": "First answer for account" },
             "firstSeenAt": { "type": ["string", "null"], "format": "date-time", "title": "First answer time" },
             "firstSeenRunId": { "type": ["string", "null"], "title": "First answer run ID" }
         },
-        "$defs": {
+        "definitions": {
             "nullableCount": { "type": ["integer", "null"], "minimum": 0 },
             "nullableSeconds": { "type": ["number", "null"], "minimum": 0 },
             "nullableFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
@@ -131,8 +131,8 @@
                 "additionalProperties": false,
                 "properties": {
                     "field": { "type": "string" },
-                    "index": { "$ref": "#/$defs/nullableCount" },
-                    "itemIndex": { "$ref": "#/$defs/nullableCount" }
+                    "index": { "$ref": "#/definitions/nullableCount" },
+                    "itemIndex": { "$ref": "#/definitions/nullableCount" }
                 }
             },
             "file": {
@@ -162,16 +162,16 @@
                     "coauthors": { "type": ["array", "null"], "items": { "type": "string" } },
                     "caption": { "type": ["string", "null"], "description": "Caption written under the original Instagram post." },
                     "publishedAt": { "type": ["string", "null"], "format": "date-time" },
-                    "durationSeconds": { "$ref": "#/$defs/nullableSeconds" },
+                    "durationSeconds": { "$ref": "#/definitions/nullableSeconds" },
                     "coverUrl": { "type": ["string", "null"], "format": "uri" },
                     "audio": { "type": ["object", "null"], "description": "Public information about the original audio or soundtrack." },
                     "videoUrl": { "type": ["string", "null"], "format": "uri", "description": "Temporary direct video URL where available." },
                     "audioUrl": { "type": ["string", "null"], "format": "uri", "description": "Temporary separate audio URL where available." },
-                    "viewCount": { "$ref": "#/$defs/nullableCount", "description": "Public views when the source supplies them separately from plays." },
-                    "playCount": { "$ref": "#/$defs/nullableCount", "description": "Public play count." },
-                    "likeCount": { "$ref": "#/$defs/nullableCount", "description": "Likes on the original post." },
-                    "commentCount": { "$ref": "#/$defs/nullableCount", "description": "Comments on the original post." },
-                    "carouselPosition": { "$ref": "#/$defs/nullableCount", "description": "Zero-based position in the original carousel." },
+                    "viewCount": { "$ref": "#/definitions/nullableCount", "description": "Public views when the source supplies them separately from plays." },
+                    "playCount": { "$ref": "#/definitions/nullableCount", "description": "Public play count." },
+                    "likeCount": { "$ref": "#/definitions/nullableCount", "description": "Likes on the original post." },
+                    "commentCount": { "$ref": "#/definitions/nullableCount", "description": "Comments on the original post." },
+                    "carouselPosition": { "$ref": "#/definitions/nullableCount", "description": "Zero-based position in the original carousel." },
                     "pinned": { "type": ["boolean", "null"] }
                 }
             }

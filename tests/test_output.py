@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from jsonschema import Draft202012Validator, Draft7Validator
+from jsonschema import Draft7Validator
 
 from reelsaid.contracts import InputRef, Outcome, VideoMetadata, VideoRef
 from reelsaid.groq import Segment, Word
@@ -68,7 +68,7 @@ def test_original_script_subtitles_and_file_references():
 
 def test_dataset_shape_and_nulls():
     schema = json.loads(Path(".actor/dataset_schema.json").read_text())["fields"]
-    validator = Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
+    validator = Draft7Validator(schema, format_checker=Draft7Validator.FORMAT_CHECKER)
     video = to_row(ref(), Outcome("skipped", "MUSIC_ONLY"), BillingFields())
     error = to_row(InputRef("datasetItems", 3, 2), Outcome("failed", "INVALID_DATASET_ITEM"), BillingFields())
     validator.validate(video)
