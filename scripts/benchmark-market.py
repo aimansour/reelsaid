@@ -66,7 +66,7 @@ def benchmark(actor, payload, cap, record, *, memory=None, timeout=75):
         started = subprocess.run(
             ["apify", "api", "POST", f"acts/{actor}/runs",
              "-p", json.dumps(options), "-d", "-"],
-            input=json.dumps(payload), capture_output=True, text=True, timeout=20, check=True,
+            input=json.dumps(payload), capture_output=True, text=True, timeout=45, check=True,
         )
         run = json.loads(started.stdout)["data"]
         report.update(runId=run["id"], datasetId=run["defaultDatasetId"], status=run["status"])

@@ -127,15 +127,19 @@ def assess(draft: TranscriptDraft, evidence: SpeechEvidence, duration: Decimal) 
         if right - left < MIN_DEFECT_SECONDS:
             continue
         supported = _overlap(left - 0.1, right + 0.1, voiced) >= min(0.12, (right - left) * .2)
-        if not supported:
-            defects.append(Defect(left, right, "unsupported_speech"))
         tokens = _words(segment.text)
         duplicate = previous and len(tokens) >= 3 and tokens == previous[0] and (
             not supported or left < previous[1] - 0.15
         )
         compressed = (segment.compression_ratio or 0) >= 2.5 and _repeated_phrase(tokens)
-        if duplicate or compressed:
-            defects.append(Defect(left, right, "repeated_text"))
+        if not supported or duplicate or compressed:
+            claimed = _merge(
+                ((max(left, word.start), min(right, word.end)) for word in draft.words), timeline, gap=0.28,
+            ) or ((left, right),)
+            if not supported:
+                defects.extend(Defect(start, end, "unsupported_speech") for start, end in claimed)
+            if duplicate or compressed:
+                defects.extend(Defect(start, end, "repeated_text") for start, end in claimed)
         previous = tokens, right
     union = _merge(((defect.start, defect.end) for defect in defects), timeline)
     affected = sum(end - start for start, end in union) / timeline

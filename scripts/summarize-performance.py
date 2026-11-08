@@ -45,9 +45,9 @@ def summarize_case(case):
     if models is not None:
         potential_asr = sum(details["potentialBilledSeconds"] * PER_HOUR[name] / 3600
                             for name, details in models.items())
-    platform = case.get("usageTotalUsd")
     usage = case.get("usage") or {}
     usage_usd = case.get("usageUsd") or {}
+    platform = max(case["usageTotalUsd"], sum(usage_usd.values())) if case.get("usageTotalUsd") is not None else None
     minutes = sum(
         max(0, ceil((Decimal(str(row["durationSeconds"])) - 180) / 60))
         for row in eligible if row.get("durationSeconds") is not None

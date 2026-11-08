@@ -328,10 +328,16 @@ class _Run:
 
     async def _work(self, ref: VideoRef, batch: _Batch, index: int, media: MediaPlan | None = None) -> JsonObject | None:
         state, options = self.state, self.options.transcript
-        answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
-        if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
-            return await self._skip_answered(ref, answer, batch, index)
-        baseline = await state.lookup(state.tenant_id, ref.video_id, options)
+        if self.options.new_reels_only and not self.options.force_refresh:
+            answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
+            if answer.answered:
+                return await self._skip_answered(ref, answer, batch, index)
+            baseline = await state.lookup(state.tenant_id, ref.video_id, options)
+        else:
+            answer, baseline = await asyncio.gather(
+                state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id),
+                state.lookup(state.tenant_id, ref.video_id, options),
+            )
         reusable = baseline.reusable and not self.options.force_refresh and baseline.successful.payload.get("runId") != state.run_id
         if reusable and answer.answered:
             row = await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True)
@@ -524,7 +530,8 @@ class _Run:
                 self.remaining = [*pending, *self.remaining[len(refs):]]
                 if self.stop_reason:
                     break
-                await self._checkpoint()
+                if self.remaining:
+                    await self._checkpoint()
         continuation = None
         if self.remaining or self.retry or self.retry_sources or self.source_cursor:
             if not self.stop_reason and self.context.expired():

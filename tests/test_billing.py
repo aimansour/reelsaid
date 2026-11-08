@@ -3,6 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from apify_client._models import PayPerEventActorPricingInfo
 
 from reelsaid.billing import (
     BASE_EVENT,
@@ -101,6 +102,24 @@ def test_uses_effective_platform_event_rates_and_previous_counts():
     pricing.is_ppe_platform_usage_paid_by_user = True
     with pytest.raises(BillingError):
         RunPricing.from_run(run, "GOLD", "0.030")
+
+
+def test_live_run_pricing_snapshot_omits_the_platform_usage_switch():
+    pricing = PayPerEventActorPricingInfo.model_validate({
+        "pricingModel": "PAY_PER_EVENT",
+        "apifyMarginPercentage": 0.2,
+        "createdAt": "2026-11-08T12:00:00Z",
+        "startedAt": "2026-11-08T12:00:00Z",
+        "pricingPerEvent": {"actorChargeEvents": {
+            BASE_EVENT: {"eventTitle": "Transcript", "eventDescription": "Transcript",
+                         "eventTieredPricingUsd": {"FREE": {"tieredEventPriceUsd": 0.012}}},
+            MINUTE_EVENT: {"eventTitle": "Minute", "eventDescription": "Minute", "eventPriceUsd": 0.003},
+        }},
+    })
+    run = SimpleNamespace(pricing_info=pricing, options=SimpleNamespace(max_total_charge_usd=0.018),
+                          charged_event_counts={BASE_EVENT: 0, MINUTE_EVENT: 0})
+    settings = RunPricing.from_run(run, "FREE", "0.018")
+    assert settings.charges_enabled and settings.quote(241).total == Decimal("0.018")
 
 
 def test_settlement_response_lost():

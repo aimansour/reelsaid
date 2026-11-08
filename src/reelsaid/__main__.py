@@ -63,14 +63,16 @@ async def main() -> None:
         if plan.valid_options and (plan.sources or plan.options.resume_from_dataset_id):
             try:
                 scoped_run = client.run(env["run_id"])
-                details = await scoped_run.get(timeout="short")
+                details, state = await asyncio.gather(
+                    scoped_run.get(timeout="short"),
+                    State.open(Actor.apify_client, env["user_id"], env["run_id"]),
+                )
                 if details is None:
                     raise BillingError("Run pricing is unavailable")
                 pricing = RunPricing.from_run(details, environ.get("APIFY_USER_PRICING_TIER"), env["max_total_charge_usd"])
                 provider = ApifyCharges(scoped_run) if pricing.charges_enabled else None
                 memory = details.options.memory_mbytes
                 concurrency = 4 if memory >= 512 else 2 if memory >= 256 else 1
-                state = await State.open(Actor.apify_client, env["user_id"], env["run_id"])
                 if keys := environ.get("REELSAID_GROQ_KEYS"):
                     accounts = load_accounts(keys, environ.get("REELSAID_GROQ_LIMITS", "{}"))
                     groq = GroqAdapter(

@@ -162,9 +162,12 @@ class RunPricing:
         pricing = run.pricing_info
         if pricing is None or pricing.pricing_model == "FREE":
             return cls(RunBudget(cap), PROPOSED_BASE.get(tier, PROPOSED_BASE["FREE"]), PROPOSED_MINUTE, False)
-        if pricing.pricing_model != "PAY_PER_EVENT" or pricing.is_ppe_platform_usage_paid_by_user:
+        paid_by_user = getattr(pricing, "is_ppe_platform_usage_paid_by_user", False) or getattr(
+            pricing, "isPPEPlatformUsagePaidByUser", False,
+        )
+        if pricing.pricing_model != "PAY_PER_EVENT" or paid_by_user:
             raise BillingError("Run pricing must cover all platform usage through transcript events")
-        events = pricing.pricing_per_event.actor_charge_events
+        events = pricing.pricing_per_event.actor_charge_events or {}
         if set(events) != {BASE_EVENT, MINUTE_EVENT} or any(item.is_one_time_event for item in events.values()):
             raise BillingError("Unexpected transcript event configuration")
 

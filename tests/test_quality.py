@@ -105,6 +105,20 @@ def test_verification_uses_aligned_dash_track_and_rejects_unaligned_track(tmp_pa
     asyncio.run(check())
 
 
+def test_unsupported_speech_uses_word_times_inside_coarse_segment():
+    candidate = TranscriptDraft(
+        "Good morning. Extra phrase. Welcome back.", "en",
+        (Segment("Good morning.", 0, 18), Segment("Extra phrase.", 20, 80),
+         Segment("Welcome back.", 83, 100)),
+        (Word("Good", 0, 9), Word("morning.", 9, 18), Word("Extra", 55, 55.5),
+         Word("phrase.", 55.5, 56), Word("Welcome", 83, 92), Word("back.", 92, 100)),
+        100,
+    )
+    result = assess(candidate, SpeechEvidence("speech", ((0, 18), (83, 100)), 0.97), Decimal(100))
+    assert result.affected_fraction == pytest.approx(.01)
+    assert [(d.start, d.end, d.reason) for d in result.defects] == [(55, 56, "unsupported_speech")]
+
+
 def test_captions_and_asr_provenance():
     evidence = SpeechEvidence("speech", ((0, 8),), .94)
     track = CaptionCandidate("https://media.cdninstagram.com/caption.vtt", "es", True)
