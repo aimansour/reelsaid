@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd -- "$(dirname "$0")/.."
+suite=${1:-all}
+if [[ $suite == all ]]; then
+    exec uv run --locked pytest -q
+fi
+if [[ ! $suite =~ ^[a-z][a-z_]*$ || $# -gt 2 ]]; then
+    printf 'Usage: %s [suite [case]]\n' "$0" >&2
+    exit 2
+fi
+if [[ $# == 2 ]]; then
+    exec uv run --locked pytest -q "tests/test_$suite.py" -k "$2"
+fi
+exec uv run --locked pytest -q "tests/test_$suite.py"

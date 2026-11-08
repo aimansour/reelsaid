@@ -1,0 +1,157 @@
+{
+    "title": "ReelSaid — Instagram Reels Transcript API",
+    "description": "Transcribe public Instagram Reels from links, profiles, shortcodes, media URLs, or an Apify dataset. Replace the prefilled spoken Reel with your own source, or keep it for a real test run. The prefill runs only when it is included in your input.",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "startUrls": {
+            "title": "Instagram URLs",
+            "description": "Enter one URL or a list. Accepts public Instagram Reels, video posts, carousels, profile URLs, and direct Instagram CDN video or audio URLs.",
+            "type": "array",
+            "editor": "stringList",
+            "prefill": ["https://www.instagram.com/reel/DS46KJNjva9/"]
+        },
+        "profiles": {
+            "title": "Instagram profiles",
+            "description": "Find public Reels on personal, creator, or business profiles. Enter account handles or profile URLs.",
+            "type": "array",
+            "editor": "stringList"
+        },
+        "shortcodes": {
+            "title": "Instagram shortcodes",
+            "description": "Enter the post identifiers found after /reel/, /p/, or /tv/ in Instagram URLs.",
+            "type": "array",
+            "editor": "stringList"
+        },
+        "datasetId": {
+            "title": "Source Apify dataset ID",
+            "description": "Read accessible Instagram video records from a previous Actor run.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "datasetItems": {
+            "title": "Inline dataset records",
+            "description": "Paste records from another workflow. Include the original Instagram post URL alongside videoUrl or audioUrl when available so the Actor can recover expired media links.",
+            "type": "array",
+            "editor": "json"
+        },
+        "language": {
+            "title": "Spoken language",
+            "description": "Use auto for automatic language detection, or enter a supported language code such as es, ar, fr, or ja. Transcripts preserve the original language.",
+            "type": "string",
+            "editor": "textfield",
+            "default": "auto"
+        },
+        "preferCaptions": {
+            "title": "Prefer original captions",
+            "description": "Use original-language captions when they provide a usable, timed transcript. Turn off to use audio transcription.",
+            "type": "boolean",
+            "default": true
+        },
+        "wordLevelTimestamps": {
+            "title": "Word-level timestamps",
+            "description": "Include the start and end times of individual words when available.",
+            "type": "boolean",
+            "default": false
+        },
+        "includeSrt": {
+            "title": "SRT subtitles",
+            "description": "Return an SRT file for each transcript with usable timing.",
+            "type": "boolean",
+            "default": true
+        },
+        "includeVtt": {
+            "title": "WebVTT subtitles",
+            "description": "Return a WebVTT file for each transcript with usable timing.",
+            "type": "boolean",
+            "default": true
+        },
+        "dateFrom": {
+            "title": "Published on or after",
+            "description": "Keep videos published on or after this UTC date in YYYY-MM-DD format.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "dateTo": {
+            "title": "Published on or before",
+            "description": "Keep videos published on or before this UTC date in YYYY-MM-DD format.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "lastDays": {
+            "title": "Published in the last days",
+            "description": "Keep videos published in the specified number of days before the run.",
+            "type": "integer",
+            "minimum": 1
+        },
+        "minViews": {
+            "title": "Minimum views",
+            "description": "Keep videos with at least this many views.",
+            "type": "integer",
+            "minimum": 0
+        },
+        "minLikes": {
+            "title": "Minimum likes",
+            "description": "Keep videos with at least this many likes.",
+            "type": "integer",
+            "minimum": 0
+        },
+        "minDurationSeconds": {
+            "title": "Minimum duration in seconds",
+            "description": "Keep videos or audio tracks at least this long.",
+            "type": "number",
+            "minimum": 0
+        },
+        "maxDurationSeconds": {
+            "title": "Maximum duration in seconds",
+            "description": "Skip videos or audio tracks longer than this before transcription.",
+            "type": "number",
+            "minimum": 0
+        },
+        "skipPinned": {
+            "title": "Skip pinned Reels",
+            "description": "Skip Reels pinned to the profile used for discovery.",
+            "type": "boolean",
+            "default": false
+        },
+        "sort": {
+            "title": "Processing order",
+            "description": "Process the newest videos first or prioritize videos with the most views.",
+            "type": "string",
+            "editor": "select",
+            "enum": ["newest", "mostViewed"],
+            "enumTitles": ["Newest first", "Most viewed first"],
+            "default": "newest"
+        },
+        "maxResults": {
+            "title": "Maximum videos per run",
+            "description": "Limit the number of distinct videos selected for processing in this run. Each video in a carousel is counted separately.",
+            "type": "integer",
+            "minimum": 1
+        },
+        "watchlistId": {
+            "title": "Watchlist ID",
+            "description": "Name this watchlist in your Apify account. Reuse the same ID in a scheduled task to track which videos it has answered.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "newReelsOnly": {
+            "title": "Only unanswered Reels",
+            "description": "Start with currently eligible videos. Later runs of the same watchlist skip videos that already received a final result.",
+            "type": "boolean",
+            "default": false
+        },
+        "forceRefresh": {
+            "title": "Refresh transcripts",
+            "description": "Process the selected videos again instead of returning saved transcripts. A new eligible transcript can incur a new charge.",
+            "type": "boolean",
+            "default": false
+        },
+        "resumeFromDatasetId": {
+            "title": "Resume from a prior run dataset",
+            "description": "Continue unfinished work from a previous ReelSaid run in your account. Completed and paid results remain available in the original run.",
+            "type": "string",
+            "editor": "textfield"
+        }
+    }
+}

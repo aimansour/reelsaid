@@ -8,7 +8,15 @@ case "$1" in
         npm exec --yes --package=apify-cli@1.11.0 -- apify actors ls --my --limit 1 --json
         ;;
     run)
-        npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/probe-transcription.py
+        if ! command -v uv >/dev/null; then
+            uv_environment=$(mktemp -d)
+            trap 'rm -rf -- "$uv_environment"' EXIT
+            python3 -m venv "$uv_environment"
+            "$uv_environment/bin/pip" install --disable-pip-version-check uv==0.12.23
+            export PATH="$uv_environment/bin:$PATH"
+        fi
+        ./scripts/verify all
+        npm exec --yes --package=apify-cli@1.11.0 -- apify validate-schema .actor/input_schema.json
         ;;
     fail)
         exit 1

@@ -1,0 +1,8 @@
+{
+    "actorSpecification": 1,
+    "name": "reelsaid",
+    "title": "ReelSaid — Instagram Reels Transcript API",
+    "description": "Transcribe Instagram Reels in the original language, with timed segments, subtitles, and metadata.",
+    "version": "0.1",
+    "input": "./input_schema.json"
+}
