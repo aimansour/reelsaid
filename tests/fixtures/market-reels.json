@@ -6,5 +6,43 @@
     "https://www.instagram.com/reel/A0000000000/"
   ],
   "profile": "nasa",
-  "profileLimit": 12
+  "profileLimit": 12,
+  "launchReferences": {
+    "short-clear": {
+      "url": "https://www.instagram.com/reel/DS46KJNjva9/",
+      "reference": "catalog.json#shortSpoken",
+      "expected": "speech"
+    },
+    "extended-captioned": {
+      "url": "https://www.instagram.com/reel/Ddi3q68I1BQ/",
+      "durationSeconds": 60.369,
+      "expected": "speech",
+      "captionAnchors": ["Number one is to have a", "bestsellers and you're", "tips for the day", "Good luck"]
+    },
+    "spanish-field": {
+      "url": "https://www.instagram.com/reel/Dfax6SllBLR/",
+      "durationSeconds": 29.928,
+      "language": "es",
+      "reference": "Spoken-language field case. Editorial overlays are separate from the spoken reference."
+    },
+    "music-field": {
+      "url": "https://www.instagram.com/reel/DdO99ZaxLrt/",
+      "durationSeconds": 34.6,
+      "reference": "APIMint publishes this as its no-speech example. Inspect the audio and report live verdicts separately."
+    },
+    "multilingual-reference": {
+      "dataset": "google/fleurs",
+      "config": "ar_eg",
+      "split": "test",
+      "row": 0,
+      "id": 1993,
+      "sha256": "40d979a6239fc08951f387c671fb5fc46fffdc5df823ed1dbdb809bc75e26620",
+      "durationSeconds": 8.16,
+      "variants": ["original", "quiet-minus-24db", "speech-over-known-chord", "digital-silence", "instrumental-chord"],
+      "sampleRate": 16000,
+      "chordHz": [261.63, 329.63, 392],
+      "chordAmplitudePerTone": 0.035,
+      "controlDurationSeconds": 9
+    }
+  }
 }

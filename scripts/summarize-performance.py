@@ -89,6 +89,24 @@ def summarize_case(case):
     }
 
 
+def matched_timing(left, right):
+    if any(left.get(key) != right.get(key) for key in ("surface", "case", "cacheCondition")):
+        return False
+    if left.get("cacheCondition") not in {"fresh", "warm-instance-fresh-result", "cached-repeat"}:
+        return False
+    requested = set(left.get("requestedVideoIds") or [])
+    if not requested or requested != set(right.get("requestedVideoIds") or []):
+        return False
+    for report in (left, right):
+        ids = report.get("completedVideoIds") or []
+        first, total = report.get("firstUsableSeconds"), report.get("totalSeconds")
+        if (report.get("status") != "SUCCEEDED" or not (report.get("quality") or {}).get("equivalent")
+                or len(ids) != len(requested) or set(ids) != requested or first is None or total is None
+                or not 0 <= first <= total):
+            return False
+    return True
+
+
 def word_error(reference, actual):
     words = lambda text: re.findall(r"[^\W_]+", text.casefold(), flags=re.UNICODE)
     expected, observed = words(reference), words(actual)

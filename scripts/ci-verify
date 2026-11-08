@@ -60,6 +60,10 @@ case "$1" in
         bash scripts/install-quality-models
         npm exec --yes --package=apify-cli@1.11.0 -- bash -c './scripts/verify runner && bash scripts/check-runner.sh batch'
         ;;
+    compare)
+        python3 -m unittest discover -s tests/automation -p test_market_benchmark.py
+        npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-market.py --launch
+        ;;
     fail)
         exit 1
         ;;
