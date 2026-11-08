@@ -6,7 +6,7 @@
     "version": "0.1",
     "buildTag": "latest",
     "dockerfile": "../Dockerfile",
-    "defaultMemoryMbytes": "sources = get(input, 'startUrls.length', 0) + get(input, 'shortcodes.length', 0) + get(input, 'datasetItems.length', 0); collection = get(input, 'profiles.length', 0) + get(input, 'datasetId.length', 0) + get(input, 'resumeFromDatasetId.length', 0); sources >= 12 ? 2048 : (collection > 0 ? (get(input, 'maxResults', 12) >= 12 ? 2048 : 1024) : (sources > 1 ? 512 : 256))",
+    "defaultMemoryMbytes": "sources = get(input, 'startUrls.length', 0) + get(input, 'shortcodes.length', 0) + get(input, 'datasetItems.length', 0); collections = get(input, 'profiles.length', 0) + get(input, 'datasetId.length', 0) + get(input, 'resumeFromDatasetId.length', 0); max(256, 512 * min(1, max(0, sources - 1)), 2048 * min(1, floor(sources / 12)), 1024 * min(1, collections), 2048 * min(1, collections) * min(1, floor(get(input, 'maxResults', 12) / 12)))",
     "input": "./input_schema.json",
     "output": "./output_schema.json",
     "storages": {

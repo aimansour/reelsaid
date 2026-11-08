@@ -52,6 +52,8 @@ The larger range read brought the legacy /tv/ budget check from 139.18 MB receiv
 
 Use the low allocation for individual URLs and larger allocations for collections. Keep ordered admission and delivery independent of worker count. A known licensed soundtrack with aligned audio enters independent speech verification before a provider request. The music-only control issues no ASR call and the mixed-speech control still produces its transcript. [Allocation comparison](https://github.com/aimansour/reelsaid/actions/runs/42482268059)
 
+The cloud evaluator initially fell back to the Actor's fixed 256 MB because its arithmetic namespace rejected the comparison operator. The revised arithmetic expression calculates 256 MB for one URL, 512 MB for two explicit sources, 1024 MB for a one-result profile, and 2048 MB for the measured 12-result profile. The verification workflow checks actual run options for the single URL and the larger profile. [Dynamic memory](https://docs.apify.com/actors/development/actor-definition/dynamic-actor-memory)
+
 | Paid tier | Proposed first three minutes | Large-batch gross | Modeled contribution | Modeled contribution with 50% FREE traffic |
 | --- | ---: | ---: | ---: | ---: |
 | Bronze | $0.011 | $0.154 | $0.10130 | $0.04455 |
