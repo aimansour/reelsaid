@@ -25,6 +25,9 @@ case "$1" in
     cloud)
         npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-actor.sh
         ;;
+    measure)
+        npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-reelsaid.py
+        ;;
     fail)
         exit 1
         ;;

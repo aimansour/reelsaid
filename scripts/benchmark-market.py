@@ -53,16 +53,19 @@ def usable(row):
     return False
 
 
-def benchmark(actor, payload, cap, record):
+def benchmark(actor, payload, cap, record, *, memory=None, timeout=75):
     report = {"actor": actor, "input": payload, "capUsd": cap, "status": "SUBMITTING"}
     if read_record(record) is not None:
         return
     request("PUT", record, report)
     start = monotonic()
     try:
+        options = {"maxTotalChargeUsd": cap, "timeout": timeout}
+        if memory is not None:
+            options["memory"] = memory
         started = subprocess.run(
             ["apify", "api", "POST", f"acts/{actor}/runs",
-             "-p", json.dumps({"maxTotalChargeUsd": cap, "timeout": 75}), "-d", "-"],
+             "-p", json.dumps(options), "-d", "-"],
             input=json.dumps(payload), capture_output=True, text=True, timeout=20, check=True,
         )
         run = json.loads(started.stdout)["data"]
@@ -80,6 +83,12 @@ def benchmark(actor, payload, cap, record):
         report.update(status=run["status"], seconds=round(monotonic() - start, 2),
                       firstTranscriptSeconds=first_text, usageTotalUsd=run.get("usageTotalUsd"),
                       chargedEventCounts=run.get("chargedEventCounts"), rows=rows)
+        if memory is not None:
+            report.update(memoryMbytes=memory, build=run.get("buildNumber"), stats=run.get("stats"),
+                          usage=run.get("usage"), usageUsd=run.get("usageUsd"))
+            store = run["defaultKeyValueStoreId"]
+            for label, key in (("summary", "SUMMARY"), ("metrics", "REELSAID_METRICS")):
+                report[label] = read_record(f"key-value-stores/{store}/records/{key}")
     except subprocess.CalledProcessError as exc:
         report.update(status="SUBMISSION_UNCONFIRMED", cliExit=exc.returncode)
     except (OSError, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
