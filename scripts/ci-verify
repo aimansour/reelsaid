@@ -24,7 +24,7 @@ case "$1" in
         npm exec --yes --package=apify-cli@1.11.0 -- apify validate-schema .actor/input_schema.json
         ;;
     cloud)
-        npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-state.py
+        npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-state.sh
         ;;
     fail)
         exit 1
