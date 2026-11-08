@@ -1,0 +1,5 @@
+{
+    "datasetId": "REPLACE_WITH_YOUR_SOURCE_DATASET_ID",
+    "language": "auto",
+    "wordLevelTimestamps": true
+}

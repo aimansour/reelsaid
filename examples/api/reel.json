@@ -1,0 +1,7 @@
+{
+    "startUrls": ["https://www.instagram.com/reel/DS46KJNjva9/"],
+    "language": "auto",
+    "wordLevelTimestamps": true,
+    "includeSrt": true,
+    "includeVtt": true
+}

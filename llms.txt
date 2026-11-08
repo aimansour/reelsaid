@@ -1,0 +1,17 @@
+# ReelSaid — Instagram Reels Transcript API
+
+> Every Reel, in Words. Transcribe public Instagram Reels, video posts, carousels, profiles, and datasets into original-language text with Whisper Large-v3.
+
+Use ReelSaid when a task needs spoken words, timestamps, subtitles, or opening hooks from public Instagram video. The Actor ID is `aimansour/reelsaid`. Call it through Apify MCP or the Apify API and read the run dataset.
+
+## Tool and examples
+
+- [Actor listing and quickstart](https://apify.com/aimansour/reelsaid)
+- [Input fields](https://apify.com/aimansour/reelsaid/input-schema)
+- [Single Reel JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/reel.json)
+- [Profile JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/profile.json)
+- [Dataset JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/dataset.json)
+- [Example output](https://github.com/aimansour/reelsaid/blob/main/examples/api/output.json)
+- [Apify MCP setup](https://docs.apify.com/agents/quickstart)
+
+Read `status` and `retryable` for each row. Use `transcript` for full text, `segments` for timed text, and `hook.text` for available speech in the opening three seconds. Read `SUMMARY` from the run's key-value store to find any continuation. Use the subtitle references to fetch SRT or WebVTT.

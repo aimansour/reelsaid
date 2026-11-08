@@ -1,0 +1,44 @@
+{
+  "name": "ReelSaid · Transcribe an Instagram Reel",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:MakeRequest",
+      "version": 4,
+      "parameters": {
+        "authenticationType": "apiKey",
+        "tlsType": "",
+        "proxyKeychain": ""
+      },
+      "mapper": {
+        "url": "https://api.apify.com/v2/acts/aimansour~reelsaid/run-sync-get-dataset-items?timeout=90",
+        "method": "post",
+        "contentType": "json",
+        "inputMethod": "jsonString",
+        "jsonStringBodyContent": "{\"startUrls\":[\"https://www.instagram.com/reel/DS46KJNjva9/\"],\"language\":\"auto\",\"wordLevelTimestamps\":true,\"includeSrt\":true,\"includeVtt\":true}",
+        "headers": [],
+        "queryParameters": [],
+        "parseResponse": true,
+        "stopOnHttpError": true,
+        "timeout": 110,
+        "allowRedirects": false,
+        "shareCookies": false,
+        "requestCompressedContent": true
+      },
+      "metadata": {
+        "designer": {"x": 0, "y": 0, "name": "Transcribe Reel"}
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicFeeder",
+      "version": 1,
+      "parameters": {},
+      "mapper": {"array": "{{1.data}}"},
+      "metadata": {
+        "designer": {"x": 300, "y": 0, "name": "Each ReelSaid result"}
+      }
+    }
+  ],
+  "metadata": {"version": 1}
+}

@@ -1,0 +1,8 @@
+{
+    "profiles": ["nasa"],
+    "maxResults": 5,
+    "sort": "newest",
+    "skipPinned": true,
+    "watchlistId": "nasa-reels",
+    "newReelsOnly": true
+}

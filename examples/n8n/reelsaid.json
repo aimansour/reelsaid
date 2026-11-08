@@ -1,0 +1,56 @@
+{
+  "name": "ReelSaid · Transcribe an Instagram Reel",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b4bc9c65-1585-4cfb-a914-ac600fbe574d",
+      "name": "Start manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/aimansour~reelsaid/run-sync-get-dataset-items?timeout=90",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"startUrls\":[\"https://www.instagram.com/reel/DS46KJNjva9/\"],\"language\":\"auto\",\"wordLevelTimestamps\":true,\"includeSrt\":true,\"includeVtt\":true}",
+        "options": {"timeout": 110000}
+      },
+      "id": "7f435289-d937-4ae8-8249-b951a340db11",
+      "name": "Transcribe Reel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "a65e16e5-aa07-4771-b407-31399bb96ab0", "name": "transcript", "value": "={{ $json.transcript }}", "type": "string"},
+            {"id": "aee89215-5ca0-4c02-a60f-fcb2467a7ac4", "name": "videoId", "value": "={{ $json.videoId }}", "type": "string"},
+            {"id": "4bcb8aa1-8504-4bf6-af48-b4ea72680a60", "name": "status", "value": "={{ $json.status }}", "type": "string"},
+            {"id": "218e384a-415e-4b90-a216-9d07647b563d", "name": "language", "value": "={{ $json.language }}", "type": "string"}
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "986f93b9-7220-4703-a6c4-52ed0fa8f635",
+      "name": "Map transcript",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 0]
+    }
+  ],
+  "connections": {
+    "Start manually": {"main": [[{"node": "Transcribe Reel", "type": "main", "index": 0}]]},
+    "Transcribe Reel": {"main": [[{"node": "Map transcript", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "pinData": {}
+}
