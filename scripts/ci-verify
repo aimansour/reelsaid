@@ -16,6 +16,7 @@ case "$1" in
             export PATH="$uv_environment/bin:$PATH"
         fi
         ./scripts/verify all
+        node --check services/state/worker.mjs
         npm exec --yes --package=apify-cli@1.11.0 -- apify validate-schema .actor/input_schema.json
         ;;
     cloud)
