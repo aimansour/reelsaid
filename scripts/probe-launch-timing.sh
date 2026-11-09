@@ -10,7 +10,26 @@ case "$mode" in
     *) exit 2 ;;
 esac
 scratch=$(mktemp -d)
-trap 'rm -rf -- "$scratch"' EXIT
+stage=actor-selection
+cleanup() {
+    local status=$?
+    if (( status != 0 )); then
+        python3 - "$mode" "$stage" "$status" <<'PY' >/dev/null 2>&1 || true
+from runpy import run_path
+import sys
+
+benchmark = run_path("scripts/benchmark-market.py")
+request = benchmark["request"]
+store = request("GET", f"key-value-stores/{benchmark['STORE']}")["data"]
+if store["generalAccess"] == "RESTRICTED":
+    mode, stage, status = sys.argv[1:]
+    request("PUT", f"key-value-stores/{store['id']}/records/native-workflow-error-{mode}",
+            {"stage": stage, "exitCode": int(status)})
+PY
+    fi
+    rm -rf -- "$scratch"
+}
+trap cleanup EXIT
 user_agent=apify-agent-skills/apify-actor-development
 actor=aimansour~reelsaid
 
@@ -92,14 +111,18 @@ PY
 project=$PWD
 tag=launch-native
 if [[ -n $check ]]; then
+    stage=overlay
     prepare_overlay
     project=$scratch
     tag=launch-timing
 fi
+stage=deployment
 bash "$project/scripts/deploy-actor.sh" "$public_package" "$tag" >"$scratch/build.json"
+stage=build-receipt
 build_id=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/build.json")
 build=$(apify api GET "actor-builds/$build_id" --user-agent "$user_agent" |
     jq -er '.data | select(.status == "SUCCEEDED") | .buildNumber')
+stage=default-check
 [[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er "$default_selection") == "$stable" ]]
 options=(--native-baseline "$build")
 if [[ -n $check ]]; then
@@ -107,4 +130,5 @@ if [[ -n $check ]]; then
 else
     options+=(--verify-native)
 fi
+stage=native-cases
 python3 scripts/benchmark-reelsaid.py "${options[@]}"
