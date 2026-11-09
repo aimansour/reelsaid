@@ -25,16 +25,22 @@ def native_baseline(build, *, timings=False, compare_policies=False):
         "panel": ["panel-captioned"],
         "batch": ["field-report-captioned", "interview-captioned"],
     }
-    experiments = [(name, references, "conditional", None) for name, references in cases.items()]
+    experiments = [(name, references, "conditional", None, "") for name, references in cases.items()]
     if compare_policies:
         experiments.extend(
-            (name, cases[name], policy, None) for policy in ("before", "after") for name in ("extended", "music")
+            (name, cases[name], "conditional", memory, "")
+            for name in ("extended", "wildlife") for memory in (512, 1024)
         )
-        experiments.extend(("extended", cases["extended"], "conditional", memory) for memory in (512, 1024))
-    for name, references, policy, memory in experiments:
+        experiments.extend(
+            ("extended", cases["extended"], "conditional", memory, "-repeat") for memory in (1024, 256)
+        )
+        experiments.extend(
+            (name, cases[name], policy, None, "") for policy in ("before", "after") for name in ("extended", "music")
+        )
+    for name, references, policy, memory, repeat in experiments:
         urls = [fixtures[reference]["url"] for reference in references]
         label = f"{name}-{memory or policy}" if memory or policy != "conditional" else name
-        record = f"key-value-stores/{store['id']}/records/native-{build}-{label}"
+        record = f"key-value-stores/{store['id']}/records/native-{build}-{label}{repeat}"
         payload = {"startUrls": urls, "forceRefresh": True}
         if policy != "conditional":
             payload["_reelsaidTimingPolicy"] = policy

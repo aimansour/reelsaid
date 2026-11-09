@@ -93,6 +93,21 @@ def test_overlapping_segments_are_ordered_by_start_without_reordering_transcript
     assert [entry.start for entry in outcome.value.segments] == [0, 4.3, 4.54]
 
 
+def test_confident_music_tolerates_one_weak_voice_frame(monkeypatch):
+    pcm = b"\x00\x10" * (audio_quality.FRAME * 4)
+    scores = [.05, .5296, .05, .05]
+    monkeypatch.setattr(audio_quality, "_voice_scores", lambda _: scores)
+    monkeypatch.setattr(audio_quality, "_music_score", lambda _: .9491)
+    evidence = audio_quality.analyze_pcm(pcm)
+    assert evidence.classification == "music_only" and evidence.confidence == .949
+
+    scores[2] = .53
+    assert audio_quality.analyze_pcm(pcm).classification == "speech"
+    scores[2] = .05
+    scores[1] = .80
+    assert audio_quality.analyze_pcm(pcm).classification == "unknown"
+
+
 def test_verified_licensed_music_avoids_asr_while_mixed_speech_is_transcribed():
     plan = media()
     plan = replace(plan, ref=replace(

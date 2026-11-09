@@ -95,7 +95,7 @@ def instrument(output):
 
     async def asr(media, options, context, **kwargs):
         with stage("repair" if kwargs.get("models") else "asr") as details:
-            details["upload"] = bool(kwargs.get("prepared_file") or media.audio.file)
+            details["preparedUpload"] = bool(kwargs.get("prepared_file"))
             return await groq.transcribe(media, options, context, **kwargs)
 
     async def evaluate(media, options, context):

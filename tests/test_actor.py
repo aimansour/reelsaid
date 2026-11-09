@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -8,12 +9,13 @@ from pathlib import Path
 from apify_client.errors import ApifyClientError
 
 from reelsaid.actor import ActorContext, run
-from reelsaid.billing import PROPOSED_BASE, PROPOSED_MINUTE, RunBudget, RunPricing
+from reelsaid.audio_quality import SpeechEvidence
+from reelsaid.billing import BASE_EVENT, PROPOSED_BASE, PROPOSED_MINUTE, RunBudget, RunPricing
 from reelsaid.contracts import Outcome
-from reelsaid.groq import Segment, Word
+from reelsaid.groq import LARGE, Segment, TranscriptDraft, Word
 from reelsaid.instagram import InstagramError, ProfilePage
 from reelsaid.media import MediaAsset, MediaPlan
-from reelsaid.quality import Assessment, TranscriptResult
+from reelsaid.quality import Assessment, TranscriptResult, evaluate_video
 
 from test_billing import Provider
 from test_state import FakeAccount
@@ -132,6 +134,59 @@ def test_api_input_and_store_prefill():
         row = next(row for row in context.output.rows if row["kind"] == "video")
         assert row["transcript"] == "One good sentence." and len(row["wordLevelTimestamps"]) == 3
         assert row["subtitles"]["vtt"]["key"] in context.output.records
+    asyncio.run(check())
+
+
+def test_audio_policy_preserves_free_and_mixed_speech_outcomes():
+    async def check():
+        case = Case()
+        silence, music, mixed, boundary, unresolved = SHORT, LONG, NEXT, "AbcDEF12340", "AbcDEF12341"
+        codes = [silence, music, mixed, boundary, unresolved]
+        for code in codes:
+            case.instagram.posts[code] = video(code, duration=10)
+        classifications = {
+            silence: SpeechEvidence("silence", confidence=1.0),
+            music: SpeechEvidence("music_only", confidence=.95),
+            mixed: SpeechEvidence("speech", ((0, 4), (6, 10)), .98),
+            boundary: SpeechEvidence("speech", ((0, 10),), .98),
+            unresolved: SpeechEvidence("speech", ((0, 10),), .98),
+        }
+        segments = {
+            silence: (Segment("Invented words.", 0, 2),),
+            music: (Segment("Invented words.", 0, 2),),
+            mixed: (Segment("Voz real.", 0, 4), Segment("Con música.", 6, 10)),
+            boundary: (Segment("Voz válida.", 2, 10),),
+            unresolved: (Segment("Texto incompleto.", 2.1, 10),),
+        }
+        calls = []
+
+        @asynccontextmanager
+        async def probe(media, context):
+            yield classifications[media.video_id], media
+
+        async def asr(media, options, context, **kwargs):
+            calls.append((media.video_id, kwargs.get("models")))
+            timing = segments[media.video_id]
+            return Outcome("success", value=TranscriptDraft(
+                " ".join(segment.text for segment in timing), "es", timing, (), 10,
+            ))
+
+        async def evaluate(media, options, context):
+            return await evaluate_video(media, options, context, speech_probe=probe, asr=asr)
+
+        context = replace(case.context("audio-policy"), evaluate=evaluate)
+        await run({"shortcodes": codes}, context)
+        rows = {row["videoId"]: row for row in context.output.rows}
+        for code, error in ((silence, "SILENCE"), (music, "MUSIC_ONLY")):
+            assert rows[code]["errorCode"] == error
+            assert not rows[code]["transcript"] and rows[code]["chargedEvents"] == {}
+        assert rows[mixed]["transcript"] == "Voz real. Con música." and rows[mixed]["charged"] is True
+        assert rows[boundary]["quality"]["affectedFraction"] == .20 and rows[boundary]["charged"] is True
+        assert rows[unresolved]["errorCode"] == "QUALITY_LIMIT_EXCEEDED"
+        assert rows[unresolved]["charged"] is False and rows[unresolved]["chargedEvents"] == {}
+        assert (boundary, (LARGE,)) not in calls and (unresolved, (LARGE,)) in calls
+        assert context.provider.events == {BASE_EVENT: 2}
+
     asyncio.run(check())
 
 

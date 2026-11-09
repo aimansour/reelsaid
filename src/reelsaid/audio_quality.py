@@ -1,5 +1,7 @@
 """Independent speech evidence for uncertain transcripts."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
@@ -7,13 +9,15 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-import numpy as np
 from curl_cffi.requests import AsyncSession
 
 from .contracts import RunContext
 from .media import LOCAL_MEDIA_FORMATS, MediaAsset, MediaClient, MediaError, MediaPlan
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 RATE = 16000
@@ -46,6 +50,8 @@ def _silero_model(path: Path):
 
 
 def _voice_scores(samples: np.ndarray) -> list[float]:
+    import numpy as np
+
     model = _silero_model(_model_directory() / "silero_vad.onnx")
     state = np.zeros((2, 1, 128), dtype=np.float32)
     data = np.zeros((1, FRAME + 64), dtype=np.float32)
@@ -80,6 +86,7 @@ def _voiced_spans(scores: list[float], duration: float) -> tuple[Interval, ...]:
 
 
 def _music_score(samples: np.ndarray) -> float:
+    import numpy as np
     from ai_edge_litert.interpreter import Interpreter
 
     model = Interpreter(model_path=str(_model_directory() / "yamnet.tflite"), num_threads=1)
@@ -98,6 +105,8 @@ def _music_score(samples: np.ndarray) -> float:
 
 
 def analyze_pcm(raw: bytes) -> SpeechEvidence:
+    import numpy as np
+
     samples = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768
     if not samples.size:
         return SpeechEvidence("unknown")
@@ -108,11 +117,13 @@ def analyze_pcm(raw: bytes) -> SpeechEvidence:
     if spans:
         confidence = round(float(np.median([score for score in scores if score >= 0.5])), 3)
         return SpeechEvidence("speech", spans, confidence)
+    peak = max(scores)
     music = _music_score(samples)
-    if music >= 0.65 and max(scores) < 0.5:
+    isolated_weak_voice = 0.5 <= peak < 0.55 and sum(score >= 0.5 for score in scores) == 1
+    if (music >= 0.65 and peak < 0.5) or (music >= 0.90 and isolated_weak_voice):
         return SpeechEvidence("music_only", confidence=round(min(1, music), 3))
-    if max(scores) < 0.35:
-        return SpeechEvidence("no_speech", confidence=round(1 - max(scores), 3))
+    if peak < 0.35:
+        return SpeechEvidence("no_speech", confidence=round(1 - peak, 3))
     return SpeechEvidence("unknown")
 
 
