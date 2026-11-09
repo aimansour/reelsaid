@@ -136,3 +136,30 @@ The cloud probe compared fresh sessions in alternating order for the extended, w
 The owner accepted the same-worker-cache comparison as the native speed gate. The release comparison reports warm matched results as such and reports observed cold startup separately. The wildlife first-result difference remains visible alongside the warm wins.
 
 The supplementary replay ran three fresh attempts per reference clip on workers with the image present. The 60-second speech clip varied from 5.59 to 7.16 seconds to first text and 6.13 to 7.66 seconds total. Wildlife varied from 6.20 to 12.07 seconds to first text and 6.73 to 12.60 seconds total. This demonstrates warm-run variability beyond image loading. Report observed latency per workload and image-cache condition. [Supplementary native repetitions](https://github.com/aimansour/reelsaid/actions/runs/42593435902)
+
+## Native and Standby release candidate
+
+The final comparison used private build `0.1.30` for both interfaces. The observer checked that the Standby setting resolved to that exact build and explicitly requested it for native runs. Its clock included caller submission and delivery of the first usable text and all requested results. The native observer polls every 0.35 seconds plus the API round trips. The Standby response delivers the first usable text with its complete JSON body.
+
+The native comparison used prior fresh peer results from the same GitHub Actions observer and clips. This kept previously delivered competitor transcripts out of the fresh speed sample. The new candidate's three runs used workers with the image already present. Measured pulls took 2–4 milliseconds. All four Reel deliveries matched their independent anchors, endings, and timing windows.
+
+| Fresh native workload | ReelSaid first / total | Fastest qualified peer first / total | Completed |
+| --- | ---: | ---: | ---: |
+| 60-second speech, attempt A | 5.57 / 6.00 s | Steadyfetch 6.51 / 8.80 s | 1 / 1 |
+| 60-second speech, attempt B | 5.33 / 6.23 s | Steadyfetch 6.51 / 8.80 s | 1 / 1 |
+| Two-Reel report and interview | 4.79 / 6.10 s | Steadyfetch 6.72 / 9.27 s | 2 / 2 |
+
+The exact candidate delivered first text and finished sooner in each of these native trials. Previously measured wildlife variance and the first-result gap remain part of the native record under the owner's matched-worker decision. [Private candidate verification](https://github.com/aimansour/reelsaid/actions/runs/42638800542) · [Qualified native peers and reference grading](launch-market.md)
+
+Steadyfetch had Standby enabled. Lance API and Panix, the other fast native peers with qualified results, had no Standby endpoint in their Actor metadata. In each comparison block, the observer requested a fresh Reel after a gap and then immediately requested a different fresh Reel. The second block reversed product order. The private candidate had zero visible active runs before the first request in each block and used the same running instance for both requests in that block. Apify did not expose Steadyfetch's multi-tenant instances to the caller. Its rows below show request order, with the peer's actual instance state unobserved. [Apify Standby scaling](https://docs.apify.com/actors/running/standby#automatic-scaling)
+
+| Fresh Standby workload | Request order | ReelSaid first / total | Steadyfetch first / total |
+| --- | --- | ---: | ---: |
+| Pyramid | First after gap | 4.05 / 4.05 s | 4.68 / 4.68 s |
+| Field report | Immediately following | 2.43 / 2.43 s | 4.05 / 4.05 s |
+| Panel | First after gap | 4.33 / 4.33 s | 5.13 / 5.13 s |
+| Interview | Immediately following | 3.29 / 3.29 s | 3.28 / 3.28 s |
+
+Both products returned the requested Reel in every pair. ReelSaid matched all 16 caption anchors, all four endings, and their timing windows. Steadyfetch matched 15 anchors and every ending and timing window. Its single-word interview omission was the same omission accepted under the established one-edit rule in the native benchmark. Three pairs favored ReelSaid by 0.63–1.62 seconds. The interview was effectively tied at a 0.01-second difference, below the resolution useful for comparing external request latency. These observations support proceeding with the current code.
+
+The candidate's final observed native platform usage was $0.001735 across the three runs. The two Standby instances together recorded $0.002161 in owner platform usage for four requests and both idle periods. The private owner had no transcript events. Steadyfetch reported one transcript event in each fresh Standby response. [First private comparison](https://github.com/aimansour/reelsaid/actions/runs/42638800542) · [Reversed-order comparison](https://github.com/aimansour/reelsaid/actions/runs/42639030893)
