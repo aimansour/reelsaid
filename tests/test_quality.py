@@ -130,10 +130,11 @@ def test_verification_uses_aligned_dash_track_and_rejects_unaligned_track(tmp_pa
 
         class Client:
             duration = Decimal("10.1")
+            span = None
 
             async def inspect(self, url, now):
                 assert url == sidecar
-                return MediaAsset(url, self.duration, True, False, 100)
+                return MediaAsset(url, self.duration, True, False, 100, audio_span=self.span)
 
             async def materialize(self, asset):
                 seen.append(asset.url)
@@ -154,7 +155,12 @@ def test_verification_uses_aligned_dash_track_and_rejects_unaligned_track(tmp_pa
         client.duration = Decimal(4)
         async with verified_audio(plan, ctx) as (_, inspected):
             assert inspected.audio.url == URL
-        assert seen == [sidecar, URL]
+        client.duration = Decimal(10)
+        client.span = Decimal("0.2"), Decimal("10.2")
+        primary = replace(plan.audio, audio_span=(Decimal(0), Decimal(10)))
+        async with verified_audio(replace(plan, audio=primary), ctx) as (_, inspected):
+            assert inspected.audio.url == URL
+        assert seen == [sidecar, URL, URL]
     asyncio.run(check())
 
 

@@ -13,7 +13,7 @@ actor = "aimansour~reelsaid"
 campaign = "allocation"
 
 
-def native_baseline(build, *, timings=False, compare_policies=False):
+def native_baseline(build, *, timings=False, compare_policies=False, startup_check=False):
     store = request("GET", f"key-value-stores/{store_name}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
@@ -26,6 +26,12 @@ def native_baseline(build, *, timings=False, compare_policies=False):
         "batch": ["field-report-captioned", "interview-captioned"],
     }
     experiments = [(name, references, "conditional", None, "") for name, references in cases.items()]
+    if startup_check:
+        experiments = [("batch", cases["batch"], "conditional", None, "")]
+        experiments.extend(
+            (name, cases[name], "conditional", memory, "")
+            for name in ("extended", "wildlife") for memory in (512, 256, 1024)
+        )
     if compare_policies:
         experiments.extend(
             (name, cases[name], "conditional", memory, "")
@@ -84,9 +90,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--native-baseline", metavar="BUILD")
     parser.add_argument("--require-timings", action="store_true")
-    parser.add_argument("--compare-policies", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--compare-policies", action="store_true")
+    mode.add_argument("--startup-check", action="store_true")
     args = parser.parse_args()
     if args.native_baseline:
-        native_baseline(args.native_baseline, timings=args.require_timings, compare_policies=args.compare_policies)
+        native_baseline(args.native_baseline, timings=args.require_timings, compare_policies=args.compare_policies,
+                        startup_check=args.startup_check)
     else:
         main()

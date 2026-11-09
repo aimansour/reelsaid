@@ -2,6 +2,11 @@
 set -euo pipefail
 
 public_package=${1:?The trusted public package is required}
+case "${2:-timing}" in
+    timing) check=--compare-policies ;;
+    startup) check=--startup-check ;;
+    *) exit 2 ;;
+esac
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 user_agent=apify-agent-skills/apify-actor-development
@@ -78,4 +83,4 @@ build_id=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/buil
 build=$(apify api GET "actor-builds/$build_id" --user-agent "$user_agent" |
     jq -er '.data | select(.status == "SUCCEEDED") | .buildNumber')
 [[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er "$default_selection") == "$stable" ]]
-python3 scripts/benchmark-reelsaid.py --native-baseline "$build" --require-timings --compare-policies
+python3 scripts/benchmark-reelsaid.py --native-baseline "$build" --require-timings "$check"

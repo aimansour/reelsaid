@@ -12,9 +12,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-dev --no-cache
+RUN uv sync --locked --no-dev --no-cache --compile-bytecode \
+    && python -m compileall -q -x '/site-packages/' /usr/local/lib/python3.12
 COPY scripts/install-quality-models ./scripts/
 RUN bash ./scripts/install-quality-models
 COPY src/ ./src/
+RUN python -m compileall -q ./src
 
 CMD ["python", "-m", "reelsaid"]

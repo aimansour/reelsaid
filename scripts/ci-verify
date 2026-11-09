@@ -62,11 +62,12 @@ case "$1" in
         ;;
     compare)
         python3 -m unittest discover -s tests/automation -p test_market_benchmark.py
-        if [[ ${2:-contract} == timing ]]; then
-            npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-launch-timing.sh "$PACKAGE_ROOT"
-        else
-            npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-market.py --launch "${2:-contract}"
-        fi
+        case "${2:-contract}" in
+            timing|startup)
+                npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-launch-timing.sh "$PACKAGE_ROOT" "$2" ;;
+            *)
+                npm exec --yes --package=apify-cli@1.11.0 -- python3 scripts/benchmark-market.py --launch "${2:-contract}" ;;
+        esac
         ;;
     fail)
         exit 1
