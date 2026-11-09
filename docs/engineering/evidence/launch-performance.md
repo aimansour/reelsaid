@@ -77,3 +77,39 @@ Across four paired provider requests per timestamp mode, the median ASR stage wa
 The runtime mounts the pinned dependency installer during the dependency layer build. The installer is absent from the final image. The two subtitle files are written concurrently and the dataset row is delivered after both writes succeed. The timing trace observed separate write calls around 60 to 70 milliseconds each. The regression verifies the concurrent writes, output order, and a single billing event.
 
 The earlier cloud retrieval probes measured the full bootstrap and GraphQL sequence at 0.893 and 1.008 seconds for the short Reel. The public post page took 0.953 and 0.803 seconds. For the Carousel, the post page varied from 0.636 to 2.069 seconds while bootstrap plus GraphQL took 0.866 and 1.067 seconds. The direct page remains a validated fallback. These timings favor keeping the primary GraphQL route while focusing the native speed work on image startup and delivery.
+
+## Exact optimized build and fresh clips
+
+Exact private build `0.1.26` passed all eight hosted checks with the compiled media layer and concurrent subtitle writes. The successful interruption test covers a failed WebVTT write after settlement, recovery of both subtitle files, and a single provider call and charge. The full local suite passed 85 tests with 13 fixture-dependent skips. [Exact optimized build](https://github.com/aimansour/reelsaid/actions/runs/42563669960)
+
+| Workload | Image pull | First usable text | Total | Apify usage |
+| --- | ---: | ---: | ---: | ---: |
+| 60-second speech | 3.523 s | 9.73 s | 10.48 s | $0.000606 |
+| 60-second speech, fresh repeat | 0.002 s | 5.71 s | 6.48 s | $0.000553 |
+| Wildlife | 3.756 s | 10.14 s | 10.87 s | $0.000616 |
+| Wildlife, fresh repeat | 0.003 s | 8.74 s | 9.48 s | $0.000601 |
+| Music | 0.003 s | — | 7.38 s | $0.000472 |
+| Panel | 0.003 s | 5.93 s | 6.68 s | $0.000556 |
+| Two-Reel batch | 0.004 s | 7.42 s | 8.20 s | $0.000956 |
+| Two-Reel batch, fresh repeat | 0.003 s | 6.13 s | 7.68 s | $0.000924 |
+
+The fresh extended repeat beat the earlier Steadyfetch reference on both measures. The fresh wildlife repeat still trailed despite having the image on its worker. Both batches completed faster than the Steadyfetch reference. One was faster on both measures. The eight observations include zero words and zero events for music at confidence 0.951.
+
+The holdout compared the same unseen videos and independently reviewed caption anchors on the exact private build, Steadyfetch, and Lance API. ReelSaid forced fresh transcription, and the four competitor runs charged for their deliveries without indicating a prior delivery. The physical image cache was evaluated separately using the platform's image-pull log timestamps. [Fresh single-Reel comparison](https://github.com/aimansour/reelsaid/actions/runs/42590758303)
+
+| Clip | Actor | Image pull | First usable text | Total | Caption and timing gate |
+| --- | --- | ---: | ---: | ---: | --- |
+| Pyramid | ReelSaid | 4.277 s | 10.16 s | 10.58 s | Passed |
+| Pyramid | Steadyfetch | 0.003 s | 5.86 s | 7.57 s | Passed |
+| Pyramid | Lance API | 0.005 s | 22.00 s | 23.30 s | Failed |
+| Glacier | ReelSaid | 0.002 s | 6.00 s | 6.85 s | Failed |
+| Glacier | Steadyfetch | 0.004 s | 7.12 s | 9.24 s | Failed |
+| Glacier | Lance API | 0.004 s | 15.48 s | 18.49 s | Failed |
+
+The glacier clip did not produce a quality-qualified speed comparison. ReelSaid and Lance each matched three of four anchors. Steadyfetch matched two. ReelSaid substituted a word in the opening anchor while retaining the closing line and the original speech timing. The separate no-audio Reel returned `NO_AUDIO` in 4.80 seconds with zero words, zero events, and $0.000453 in owner-run Apify usage. Steadyfetch and Lance settled at $0.045 in event charges across the four fresh competitor observations.
+
+The CPU-only dependency experiment targets the runtime layer added above the Apify base. The installed Linux wheel bundles contain separate GPU/compiler tooling, standalone ONNX native API binaries, and translation catalogs that the existing CPU inference and ISO language lookup paths do not load. A temporary isolated copy without those components passed all 37 focused audio, actor, media, and output cases. [Apify performance guidance](https://docs.apify.com/actors/development/performance) · [CPU runtime experiment](https://github.com/aimansour/reelsaid/actions/runs/42591376565)
+
+The `0.1.27` experiment passed the same eight hosted quality checks. Image pulls for the two matched cold speech clips dropped from 3.52 to 2.87 seconds and from 3.76 to 3.00 seconds. Cold first/total changed from 9.73/10.48 to 8.68/9.36 on the extended clip and from 10.14/10.87 to 8.82/9.52 on wildlife. The warm runs delivered extended in 5.48/6.18 and wildlife in 6.90/7.58 seconds. Both warm batches led the Steadyfetch batch with 5.40/6.82 and 5.72/6.40 seconds. Music remained free at 0.951 classification confidence. That run had a 2.89-second image pull, so its total cannot be compared directly to the warm music baseline.
+
+The pinned HTTP wheel contains removable native symbols. Stripping them saved 11.81 MB in a local gzip comparison. The stripped wheel imported successfully and passed the full local suite with the existing 13 skips. The selected dependency stage now strips it and omits the validated CPU-only payloads before copying the environment into the runtime. Build tools stay in the disposable stage. The next exact hosted run includes two fresh pyramid observations so the quality-qualified holdout can be evaluated on a worker with the same image cache condition as the Steadyfetch observation.

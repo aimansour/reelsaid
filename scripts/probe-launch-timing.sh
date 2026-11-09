@@ -8,7 +8,7 @@ case "$mode" in
     startup|cached-base) check=--startup-check ;;
     lean-media) check=--lean-media-check ;;
     timestamps) check=--compare-timestamps ;;
-    native|cpu-runtime) check= ;;
+    native) check= ;;
     *) exit 2 ;;
 esac
 scratch=$(mktemp -d)
@@ -126,39 +126,7 @@ PY
 
 project=$PWD
 tag=launch-native
-if [[ $mode == cpu-runtime ]]; then
-    stage=overlay
-    cp -a .actor src "$scratch/"
-    cp Dockerfile .dockerignore pyproject.toml uv.lock "$scratch/"
-    mkdir -p "$scratch/scripts"
-    cp scripts/install-quality-models scripts/deploy-actor.sh "$scratch/scripts/"
-    python3 - "$scratch/Dockerfile" <<'PY'
-from pathlib import Path
-import sys
-
-file = Path(sys.argv[1])
-dockerfile = file.read_text()
-install = "    uv sync --locked --no-dev --no-cache --compile-bytecode"
-if dockerfile.count(install) != 1:
-    raise SystemExit("CPU-only overlay no longer matches the dependency layer.")
-packages = "/app/.venv/lib/python3.12/site-packages"
-optional = (
-    "ai_edge_litert/aot",
-    "ai_edge_litert/libLiteRtWebGpuAccelerator.so",
-    "ai_edge_litert/tools",
-    "ai_edge_litert/vendors",
-    "onnxruntime/capi/libonnxruntime.so.1.31.1",
-    "pycountry/locales",
-)
-continuation = " " + chr(92) + "\n"
-prune = continuation + "    && rm -rf " + (continuation + "        ").join(
-    f"{packages}/{path}" for path in optional
-)
-file.write_text(dockerfile.replace(install, install + prune))
-PY
-    project=$scratch
-    tag=launch-cpu-runtime
-elif [[ -n $check ]]; then
+if [[ -n $check ]]; then
     stage=overlay
     prepare_overlay
     project=$scratch

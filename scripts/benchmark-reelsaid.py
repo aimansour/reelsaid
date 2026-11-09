@@ -31,6 +31,9 @@ def native_baseline(build, *, timings=False, compare_policies=False, startup_che
         experiments.extend(
             (name, cases[name], "conditional", None, "-repeat") for name in ("extended", "wildlife", "batch")
         )
+        experiments.extend(
+            ("pyramid", ["pyramid-captioned"], "conditional", None, repeat) for repeat in ("", "-repeat")
+        )
     if compare_timestamps:
         experiments = [
             (name, cases[name], "conditional", None, f"-{timestamps}-{index}")

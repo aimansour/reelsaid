@@ -1,8 +1,10 @@
-FROM apify/actor-python:3.12@sha256:5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a AS media-tools
+FROM apify/actor-python:3.12@sha256:5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a AS build-tools
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential nasm pkg-config xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+FROM build-tools AS media-tools
 WORKDIR /ffmpeg
 RUN curl --fail --silent --show-error --location --retry 2 \
         https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o source.tar.xz \
@@ -19,6 +21,20 @@ RUN curl --fail --silent --show-error --location --retry 2 \
     && install -D -m 0644 COPYING.LGPLv2.1 /native/share/licenses/ffmpeg/COPYING.LGPLv2.1
 
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv-tool
+FROM build-tools AS python-dependencies
+
+WORKDIR /app
+ENV UV_PYTHON_DOWNLOADS=never
+COPY pyproject.toml uv.lock ./
+# Keep the CPU inference libraries and ISO language database used at runtime.
+RUN --mount=from=uv-tool,source=/uv,target=/usr/local/bin/uv \
+    uv sync --locked --no-dev --no-cache --compile-bytecode \
+    && cd .venv/lib/python3.12/site-packages \
+    && strip --strip-unneeded curl_cffi/_wrapper.abi3.so \
+    && rm -rf ai_edge_litert/aot ai_edge_litert/libLiteRtWebGpuAccelerator.so \
+        ai_edge_litert/tools ai_edge_litert/vendors \
+        onnxruntime/capi/libonnxruntime.so.1.31.1 pycountry/locales
+
 FROM apify/actor-python:3.12@sha256:5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a
 
 WORKDIR /app
@@ -29,10 +45,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src
 
 COPY --from=media-tools /native/ /usr/local/
-COPY pyproject.toml uv.lock ./
-RUN --mount=from=uv-tool,source=/uv,target=/usr/local/bin/uv \
-    uv sync --locked --no-dev --no-cache --compile-bytecode \
-    && python -m compileall -q -x '/site-packages/' /usr/local/lib/python3.12
+COPY --from=python-dependencies /app/.venv /app/.venv
+RUN python -m compileall -q -x '/site-packages/' /usr/local/lib/python3.12
 COPY scripts/install-quality-models ./scripts/
 RUN bash ./scripts/install-quality-models
 COPY src/ ./src/
