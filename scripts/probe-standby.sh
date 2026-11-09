@@ -18,4 +18,4 @@ while (( SECONDS < deadline )); do
 done
 [[ ${status:-} == SUCCEEDED ]]
 build=$(jq -er '.data.buildNumber' <<<"$receipt")
-python3 probes/standby/check-cloud.py "$actor" "$build"
+python3 probes/standby/check-cloud.py "$actor" "$build" "${1:-SINGLE_TENANT}"

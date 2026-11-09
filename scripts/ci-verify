@@ -65,6 +65,8 @@ case "$1" in
         case "${2:-contract}" in
             standby-probe)
                 npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-standby.sh ;;
+            standby-multi)
+                npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-standby.sh MULTI_TENANT ;;
             retrieval-timing)
                 npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-discovery.sh '{"measureGuestBootstrap":true}' ;;
             timing|startup|cached-base|lean-media|timestamps|native)

@@ -46,12 +46,15 @@ def create_app(environment):
             return web.json_response({"error": "INVALID_MODE"}, status=400)
 
         request_id = request.headers.get("X-Actor-Request-ID")
+        gateway_user = request.headers.get("X-Apify-User-ID")
         result = {
             "origin": Actor.configuration.meta_origin,
             "port": Actor.configuration.web_server_port,
             "readinessSeen": ready,
             "runId": run_id,
             "callerContext": context,
+            "gatewayCallerContext": sha256(gateway_user.encode()).hexdigest()[:16] if gateway_user else None,
+            "requestHost": request.host,
             "platformBudget": str(platform_budget) if platform_budget is not None else None,
             "authorizationForwarded": "Authorization" in request.headers,
             "apifyAuthorizationForwarded": "X-Apify-Authorization" in request.headers,
