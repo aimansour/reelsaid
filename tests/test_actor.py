@@ -360,6 +360,34 @@ def test_bounded_newest_profile_defers_older_pages_for_resume():
     asyncio.run(check())
 
 
+def test_bounded_watchlist_fetches_more_only_when_recent_videos_were_answered():
+    async def check():
+        case = Case()
+        pages = []
+        older = ("profile", "older")
+
+        async def profile(username, cursor):
+            pages.append(cursor)
+            codes = (NEXT,) if cursor else (SHORT, LONG)
+            entries = tuple({"code": code, "clips_tab_pinned_user_ids": []} for code in codes)
+            return ProfilePage("1", entries, None if cursor else older)
+
+        case.instagram.profile = profile
+        options = {"profiles": ["public.personal"], "newReelsOnly": True, "maxResults": 2}
+        first = case.context("first")
+        result = await run(options, first)
+        assert pages == [None]
+        assert result.successful == 2 and result.continuation
+
+        pages.clear()
+        second = case.context("second")
+        result = await run(options, second)
+        assert pages == [None, older]
+        assert result.previously_answered == 2 and result.successful == 1
+        assert [row["videoId"] for row in second.output.rows if row["status"] == "success"] == [NEXT]
+    asyncio.run(check())
+
+
 def test_batch_keeps_completed_results():
     async def check():
         case = Case()

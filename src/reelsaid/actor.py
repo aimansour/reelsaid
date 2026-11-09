@@ -234,18 +234,26 @@ class _Run:
         self.known.update(video.video_id for video in self.remaining)
         return True
 
+    async def _already_answered(self, video_id: str) -> bool:
+        if self.state is not None:
+            with suppress(ApifyClientError, StateUnavailable):
+                answer = await self.state.lookup_answer(self.state.tenant_id, self.options.watchlist_id, video_id)
+                return answer.answered
+        return False
+
     async def _discovery(self) -> None:
         plan = replace(self.plan, outcomes=())
         positions = {source.ref: index for index, source in enumerate(plan.sources)}
         lookup = replace(self.context, now=self.filter_time)
+        is_answered = self._already_answered if self.options.new_reels_only and not self.options.force_refresh else None
         batches = []
         if not self.restored or self.source_cursor:
-            batches.append(await discover(plan, lookup, continuation=self.source_cursor))
+            batches.append(await discover(plan, lookup, continuation=self.source_cursor, is_answered=is_answered))
             self.source_cursor = batches[-1].continuation
         retried = set(self.retry_sources)
         if retried and not self.context.expired():
             subset = tuple(source for index, source in enumerate(plan.sources) if index in retried)
-            retries = await discover(replace(plan, sources=subset), lookup)
+            retries = await discover(replace(plan, sources=subset), lookup, is_answered=is_answered)
             batches.append(retries)
             self.retry_sources.clear()
             if retries.continuation:

@@ -1,6 +1,7 @@
 """Resolve submitted sources to unique, ordered video work."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -440,9 +441,11 @@ class _DiscoveryRun:
     async def profile(
         self, name: str, ref: InputRef, position: DiscoveryCursor, *,
         newest_limit: int | None, filters: FilterOptions,
+        is_answered: Callable[[str], Awaitable[bool]] | None,
     ) -> DiscoveryCursor | None:
         cursor, offset, profile_id = position.profile_cursor, position.profile_offset, position.profile_id
         seen_cursors = set()
+        answers: dict[str, bool] = {}
         while True:
             if self.context.expired():
                 return replace(position, profile_cursor=cursor, profile_offset=offset, profile_id=profile_id)
@@ -474,25 +477,31 @@ class _DiscoveryRun:
             cursor, offset = page.cursor, 0
             if newest_limit is not None:
                 recent = [
-                    video for video in self.videos.values()
+                    video.video_id for video in self.videos.values()
                     if video.metadata.pinned is False and video.metadata.published_at is not None
                     and not _filter(video, filters, self.context.now)
                 ]
+                if is_answered is not None and len(recent) >= newest_limit:
+                    unchecked = [video_id for video_id in recent if video_id not in answers]
+                    checked = await asyncio.gather(*(is_answered(video_id) for video_id in unchecked))
+                    answers.update(zip(unchecked, checked, strict=True))
+                    recent = [video_id for video_id in recent if not answers[video_id]]
                 if len(recent) >= newest_limit:
                     return replace(position, profile_cursor=cursor, profile_offset=0, profile_id=profile_id)
 
 
 async def discover(
     plan: InputPlan, context: RunContext, *, continuation: DiscoveryCursor | None = None,
+    is_answered: Callable[[str], Awaitable[bool]] | None = None,
 ) -> Discovery:
     run = _DiscoveryRun(context, plan.outcomes)
     cursor = None
     start = continuation.source_index if continuation else 0
     if not plan.valid_options:
         return Discovery((), plan.outcomes, (), 0, None)
-    newest_limit = plan.options.max_results if (
-        len(plan.sources) == 1 and not plan.options.new_reels_only and plan.filters.sort == "newest"
-    ) else None
+    only_unanswered = plan.options.new_reels_only and not plan.options.force_refresh
+    bounded = not only_unanswered or is_answered is not None
+    newest_limit = plan.options.max_results if bounded and len(plan.sources) == 1 and plan.filters.sort == "newest" else None
     prefetched_until = start
     concurrency = context.discovery_concurrency
     for index, source in enumerate(plan.sources[start:], start):
@@ -502,7 +511,8 @@ async def discover(
             break
         ref, value = source.ref, source.value
         if source.kind == "profile":
-            cursor = await run.profile(value, ref, position, newest_limit=newest_limit, filters=plan.filters)
+            cursor = await run.profile(value, ref, position, newest_limit=newest_limit, filters=plan.filters,
+                                       is_answered=is_answered)
             if cursor is not None:
                 break
         elif source.kind == "dataset":

@@ -21,6 +21,10 @@ while IFS= read -r task; do
     receipt="key-value-stores/$store/records/TASK-$slug"
     jq -c --argjson task "$task" '.data | $task + {runId:.id,build:.buildNumber,datasetId:.defaultDatasetId}' <<< "$run" |
         api PUT "$receipt" -d - >/dev/null
+    if jq -e '.data.status == "READY" or .data.status == "RUNNING"' <<< "$run" >/dev/null; then
+        run_id=$(jq -er .data.id <<< "$run")
+        run=$(api GET "actor-runs/$run_id" -p '{"waitForFinish":40}')
+    fi
     dataset=$(jq -er --arg task "$task_id" --arg build "$build_id" '
         .data | select(.status == "SUCCEEDED" and .actorTaskId == $task and .buildId == $build) | .defaultDatasetId
     ' <<< "$run")
