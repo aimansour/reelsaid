@@ -305,8 +305,14 @@ class _Run:
             payload["files"]["vtt"] if self.options.transcript.include_vtt else None,
         )
         links = dict.fromkeys(("srt", "vtt"))
-        for file in subtitle_records(files, ref.video_id, self.output.store_id):
-            await self.output.put(file.key, file.content.encode(), file.content_type)
+        records = subtitle_records(files, ref.video_id, self.output.store_id)
+        writes = await asyncio.gather(
+            *(self.output.put(file.key, file.content.encode(), file.content_type) for file in records),
+            return_exceptions=True,
+        )
+        for file, result in zip(records, writes, strict=True):
+            if isinstance(result, BaseException):
+                raise result
             links[file.format] = file.reference
         row.update(
             metadata=metadata, provenance=current["provenance"], subtitles=links, cached=cached,

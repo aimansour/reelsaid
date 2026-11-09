@@ -90,6 +90,8 @@ def verify_native_case(observation, references):
         if "captionAnchors" in reference:
             if not market["usable"](row) or not grade(row, reference)["equivalent"]:
                 raise RuntimeError("Native verification missed reference speech or timings.")
+            if not all(row["subtitles"].get(fmt) for fmt in ("srt", "vtt")):
+                raise RuntimeError("Native verification did not deliver both subtitle formats.")
         elif row["errorCode"] != "MUSIC_ONLY" or row["transcript"] or row["charged"] or row["chargedEvents"]:
             raise RuntimeError("Native verification did not return a free music result.")
 

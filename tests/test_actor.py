@@ -190,6 +190,37 @@ def test_audio_policy_preserves_free_and_mixed_speech_outcomes():
     asyncio.run(check())
 
 
+def test_subtitle_records_write_concurrently_before_delivering_the_row():
+    class CoordinatedOutput(Output):
+        def __init__(self):
+            super().__init__("subtitle-order")
+            self.writes = set()
+            self.both_started = asyncio.Event()
+
+        async def put(self, key, value, content_type="application/json"):
+            if key.startswith("subtitle-"):
+                self.writes.add(key)
+                if len(self.writes) == 2:
+                    self.both_started.set()
+                await asyncio.wait_for(self.both_started.wait(), timeout=.5)
+            await super().put(key, value, content_type)
+
+        async def push(self, row):
+            assert self.writes <= self.records.keys()
+            await super().push(row)
+
+    async def check():
+        case = Case()
+        output = CoordinatedOutput()
+        context = case.context("subtitle-order", output=output)
+        await run({"shortcodes": [SHORT]}, context)
+        assert len(output.writes) == 2
+        assert len(output.rows) == 1 and all(output.rows[0]["subtitles"].values())
+        assert context.provider.events == {BASE_EVENT: 1}
+
+    asyncio.run(check())
+
+
 def test_ordered_budget_stop_and_resume():
     async def check():
         case = Case()

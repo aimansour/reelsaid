@@ -51,7 +51,8 @@ esac
 
 def test_runtime_docker_context_keeps_source_last_and_excludes_private_artifacts():
     docker = Path("Dockerfile").read_text()
-    assert docker.index("RUN uv sync --locked") < docker.index("COPY src/")
+    assert docker.index("uv sync --locked") < docker.index("COPY src/")
+    assert "RUN --mount=from=uv-tool,source=/uv,target=/usr/local/bin/uv" in docker
     assert docker.index("RUN bash ./scripts/install-quality-models") < docker.index("COPY src/")
     ignore = Path(".dockerignore").read_text().splitlines()
     assert ignore[0] == "**"
