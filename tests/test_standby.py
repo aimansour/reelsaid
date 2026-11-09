@@ -3,11 +3,14 @@ from dataclasses import replace
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 from aiohttp.test_utils import TestClient, TestServer
 from jsonschema import Draft7Validator
+import pytest
 
-from reelsaid.billing import BASE_EVENT
+from reelsaid import standby
+from reelsaid.billing import BASE_EVENT, BillingError
 from reelsaid.standby import create_app
 
 from test_actor import CAROUSEL, Case, LONG, SHORT
@@ -57,6 +60,28 @@ def test_readiness_uses_no_processing():
         assert all(not provider.calls for provider in contexts.providers.values())
 
     asyncio.run(check())
+
+
+def test_cloud_start_reads_actor_id_from_sdk_configuration(monkeypatch):
+    visited = []
+
+    async def missing():
+        return None
+
+    def actor(actor_id):
+        visited.append(actor_id)
+        return SimpleNamespace(get=missing)
+
+    sdk = SimpleNamespace(
+        get_env=lambda: {"is_at_home": True, "run_id": "run", "user_id": "owner",
+                         "token": None, "api_base_url": "https://api.apify.com"},
+        configuration=SimpleNamespace(standby_url="https://test-reelsaid.apify.actor", actor_id="actor"),
+        apify_client=SimpleNamespace(actor=actor),
+    )
+    monkeypatch.setattr(standby, "Actor", sdk)
+    with pytest.raises(BillingError, match="pricing configuration"):
+        asyncio.run(standby.serve_standby())
+    assert visited == ["actor"]
 
 
 def test_empty_or_invalid_request_has_no_side_effect():

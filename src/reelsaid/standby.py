@@ -192,12 +192,13 @@ async def serve_standby() -> None:
     owner = env["user_id"]
     gateway_host, charge_run, active_pricing, local_store = None, None, None, None
     if cloud:
-        gateway_host = urlsplit(Actor.configuration.standby_url).hostname
-        if not gateway_host or not gateway_host.endswith(".apify.actor") or not owner or not run_id:
+        configuration = Actor.configuration
+        gateway_host = urlsplit(configuration.standby_url).hostname
+        if not gateway_host or not gateway_host.endswith(".apify.actor") or not owner or not run_id or not configuration.actor_id:
             raise StateAccessError("The Standby gateway configuration could not be verified")
         scoped = ApifyClientAsync(token=env["token"], api_url=env["api_base_url"], max_retries=0)
         charge_run = scoped.run(run_id)
-        actor = await client.actor(env["actor_id"]).get()
+        actor = await client.actor(configuration.actor_id).get()
         if actor is None:
             raise BillingError("The Actor pricing configuration is unavailable")
         now = datetime.now(UTC)
