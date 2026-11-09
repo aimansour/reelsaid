@@ -4,7 +4,16 @@ cd -- "$(dirname "$0")/.."
 
 user_agent=apify-agent-skills/apify-actor-development
 actor=aimansour~reelsaid-standby-probe
-push=$(apify actors push --dir probes/standby --wait-for-finish 0 --json --user-agent "$user_agent")
+mode=${1:-SINGLE_TENANT}
+package=probes/standby
+if [[ $mode == CROSS ]]; then
+    workspace=$(mktemp -d)
+    trap 'rm -rf -- "$workspace"' EXIT
+    cp -R probes/standby/. "$workspace/"
+    python3 probes/standby/prepare-cross.py "$workspace/.actor/actor.json"
+    package=$workspace
+fi
+push=$(apify actors push --dir "$package" --wait-for-finish 0 --json --user-agent "$user_agent")
 build_id=$(jq -er '.build.id' <<<"$push")
 deadline=$((SECONDS + 180))
 while (( SECONDS < deadline )); do
@@ -18,4 +27,4 @@ while (( SECONDS < deadline )); do
 done
 [[ ${status:-} == SUCCEEDED ]]
 build=$(jq -er '.data.buildNumber' <<<"$receipt")
-python3 probes/standby/check-cloud.py "$actor" "$build" "${1:-SINGLE_TENANT}"
+python3 probes/standby/check-cloud.py "$actor" "$build" "$mode"

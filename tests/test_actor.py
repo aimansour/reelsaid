@@ -137,6 +137,31 @@ def test_api_input_and_store_prefill():
     asyncio.run(check())
 
 
+def test_cache_and_charges_are_independent_between_accounts():
+    async def check():
+        alice, bob = Case(), Case()
+        alice.account, bob.account = FakeAccount("alice"), FakeAccount("bob")
+        request = {"startUrls": [f"https://www.instagram.com/reel/{SHORT}/"]}
+        alice_first = alice.context("alice-first", cap=Decimal("0.012"))
+        alice_retry = alice.context("alice-retry", cap=Decimal("0"))
+        bob_first = bob.context("bob-first", cap=Decimal("0.012"))
+
+        await run(request, alice_first)
+        await run(request, alice_retry)
+        await run(request, bob_first)
+
+        assert alice_first.provider.events == bob_first.provider.events == {BASE_EVENT: 1}
+        assert not alice_retry.provider.calls
+        assert alice.asr_calls == bob.asr_calls == [SHORT]
+        assert alice_retry.output.rows[0]["cached"] is True
+        assert bob_first.output.rows[0]["cached"] is False
+        assert alice_first.output.rows[0]["subtitles"]["vtt"]["key"] in alice_first.output.records
+        assert bob_first.output.rows[0]["subtitles"]["vtt"]["key"] in bob_first.output.records
+        assert alice_first.output.store_id != bob_first.output.store_id
+
+    asyncio.run(check())
+
+
 def test_audio_policy_preserves_free_and_mixed_speech_outcomes():
     async def check():
         case = Case()

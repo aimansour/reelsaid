@@ -3,7 +3,9 @@
 import asyncio
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+from os import environ
 import signal
+from urllib.parse import urlsplit
 
 from aiohttp import web
 from apify import Actor, Event
@@ -25,6 +27,8 @@ def create_app(environment):
     run_id = environment["run_id"]
     context = sha256(runtime_user.encode()).hexdigest()[:16] if runtime_user else None
     platform_budget = environment["max_total_charge_usd"]
+    standby_host = urlsplit(Actor.configuration.standby_url).hostname
+    allowed = frozenset(environ.get("REELSAID_STANDBY_QA_CALLERS", "").split())
     client = Actor.apify_client if at_home else None
     run = client.run(run_id) if client else None
 
@@ -36,6 +40,16 @@ def create_app(environment):
         return web.json_response({"status": "ready"})
 
     async def observe(request):
+        gateway_user = request.headers.get("X-Apify-User-ID")
+        gateway_context = sha256(gateway_user.encode()).hexdigest()[:16] if gateway_user else None
+        if at_home and (
+            request.headers.getall("Host", []) != [standby_host]
+            or not gateway_context
+            or not request.headers.get("X-Actor-Request-ID")
+            or not request.headers.get("X-Apify-Standby-Caller-Type")
+            or (allowed and gateway_context not in allowed)
+        ):
+            return web.json_response({"error": "STANDBY_AUTH_REQUIRED"}, status=403)
         if request.content_type != "application/json":
             return web.json_response({"error": "JSON_REQUIRED"}, status=415)
         try:
@@ -46,14 +60,13 @@ def create_app(environment):
             return web.json_response({"error": "INVALID_MODE"}, status=400)
 
         request_id = request.headers.get("X-Actor-Request-ID")
-        gateway_user = request.headers.get("X-Apify-User-ID")
         result = {
             "origin": Actor.configuration.meta_origin,
             "port": Actor.configuration.web_server_port,
             "readinessSeen": ready,
             "runId": run_id,
             "callerContext": context,
-            "gatewayCallerContext": sha256(gateway_user.encode()).hexdigest()[:16] if gateway_user else None,
+            "gatewayCallerContext": gateway_context,
             "requestHost": request.host,
             "platformBudget": str(platform_budget) if platform_budget is not None else None,
             "authorizationForwarded": "Authorization" in request.headers,
@@ -76,7 +89,7 @@ def create_app(environment):
                 result["settlement"] = "budget-rejected"
             elif run:
                 attribution = request_id if payload.get("usePlatformRequestId") is True and request_id != FORGED else None
-                key = f"reelsaid-standby-probe-{run_id}"
+                key = f"reelsaid-standby-probe-{run_id}-{gateway_context}"
                 try:
                     for _ in range(2):
                         await run.charge(EVENT_NAME, idempotency_key=key, request_id=attribution)
@@ -94,8 +107,10 @@ def create_app(environment):
                 info = await store.update(general_access="RESTRICTED")
             if info.general_access != "RESTRICTED":
                 return web.json_response({"error": "STORAGE_PRIVACY_UNCONFIRMED"}, status=503)
-            await store.set_record(STORE_KEY, {"callerContext": context}, content_type="application/json")
+            key = f"{STORE_KEY}-{gateway_context}"
+            await store.set_record(key, {"callerContext": gateway_context}, content_type="application/json")
             result["storageId"] = info.id
+            result["storageKey"] = key
 
         if run:
             details = await run.get()
