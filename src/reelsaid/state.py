@@ -98,7 +98,7 @@ class Checkpoint:
 class State:
     def __init__(
         self, client: ApifyClientAsync, store, tenant_id: str, run_id: str, *,
-        namespace: str = "reelsaid-v1", lock_seconds: int = 90,
+        namespace: str = "reelsaid-v1", lock_seconds: int = 90, storage_owner_id: str | None = None,
     ):
         if not tenant_id or not run_id:
             raise StateAccessError("State requires an authenticated account and run")
@@ -107,6 +107,7 @@ class State:
         self.tenant_id = tenant_id
         self.run_id = run_id
         self._namespace = namespace
+        self._storage_owner_id = storage_owner_id or tenant_id
         self._client_key = uuid4().hex
         self.lock_duration = timedelta(seconds=lock_seconds)
         self._queues = {}
@@ -117,15 +118,16 @@ class State:
     @classmethod
     async def open(
         cls, client: ApifyClientAsync, tenant_id: str, run_id: str, *,
-        namespace: str = "reelsaid-v1", lock_seconds: int = 90,
+        namespace: str = "reelsaid-v1", lock_seconds: int = 90, storage_owner_id: str | None = None,
     ):
         try:
             store_info = await client.key_value_stores().get_or_create(name=f"{namespace}-state")
             store = client.key_value_store(store_info.id)
-            await cls._restrict(store, store_info, tenant_id)
+            await cls._restrict(store, store_info, storage_owner_id or tenant_id)
         except ApifyClientError as error:
             raise StateUnavailable("Account state is unavailable") from error
-        return cls(client, store, tenant_id, run_id, namespace=namespace, lock_seconds=lock_seconds)
+        return cls(client, store, tenant_id, run_id, namespace=namespace, lock_seconds=lock_seconds,
+                   storage_owner_id=storage_owner_id)
 
     @staticmethod
     async def _restrict(resource, info, tenant_id: str) -> None:
@@ -140,7 +142,7 @@ class State:
         if slot not in self._queues:
             info = await self._client.request_queues().get_or_create(name=f"{self._namespace}-work-{slot:02x}")
             queue = self._client.request_queue(info.id, client_key=self._client_key)
-            await self._restrict(queue, info, self.tenant_id)
+            await self._restrict(queue, info, self._storage_owner_id)
             registration = await queue.add_request(SHARED_REQUEST)
             self._queues[slot] = (queue, registration.request_id)
         return self._queues[slot]

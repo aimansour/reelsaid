@@ -58,7 +58,7 @@ case "$1" in
             sudo apt-get install -y --no-install-recommends ffmpeg
         fi
         bash scripts/install-quality-models
-        npm exec --yes --package=apify-cli@1.11.0 -- bash -c './scripts/verify runner && bash scripts/check-runner.sh batch'
+        npm exec --yes --package=apify-cli@1.11.0 -- bash -c './scripts/verify runner && ./scripts/verify standby && bash scripts/check-runner.sh batch && bash scripts/check-runner.sh standby'
         ;;
     compare)
         python3 -m unittest discover -s tests/automation -p test_market_benchmark.py

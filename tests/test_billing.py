@@ -127,6 +127,29 @@ def test_live_run_pricing_snapshot_omits_the_platform_usage_switch():
     assert resumed.budget.reserve(resumed.quote(9)).status == "deferred"
 
 
+def test_standby_admission_reserves_the_largest_configured_tier_quote():
+    pricing = SimpleNamespace(
+        pricing_model="PAY_PER_EVENT",
+        pricing_per_event=SimpleNamespace(actor_charge_events={
+            BASE_EVENT: SimpleNamespace(
+                event_price_usd=None,
+                event_tiered_pricing_usd={
+                    "FREE": SimpleNamespace(tiered_event_price_usd=0.012),
+                    "GOLD": SimpleNamespace(tiered_event_price_usd=0.009),
+                },
+                is_one_time_event=False,
+            ),
+            MINUTE_EVENT: SimpleNamespace(
+                event_price_usd=0.003, event_tiered_pricing_usd=None, is_one_time_event=False,
+            ),
+        }),
+    )
+    settings = RunPricing.from_standby(pricing, Decimal("0.014"))
+    assert settings.charges_enabled and not settings.amount_is_exact
+    assert settings.quote(181).total == Decimal("0.015")
+    assert settings.budget.reserve(settings.quote(181)).status == "deferred"
+
+
 def test_settlement_response_lost():
     async def check():
         provider = Provider()

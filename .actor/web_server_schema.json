@@ -1,0 +1,208 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ReelSaid — Instagram Reels Transcript API",
+    "version": "1.0.0",
+    "description": "Get a timed, original-language transcript for one public Instagram video in a single HTTP request. Send batches, profiles, and continuation requests through the native Apify run API."
+  },
+  "security": [{"apifyToken": []}],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "getReadiness",
+        "summary": "Check if ReelSaid is ready",
+        "parameters": [{
+          "name": "X-Apify-Container-Server-Readiness-Probe",
+          "in": "header",
+          "description": "Apify sends this header to check the server before routing traffic.",
+          "schema": {"type": "string"}
+        }],
+        "responses": {
+          "200": {
+            "description": "ReelSaid is ready to accept transcription requests.",
+            "content": {
+              "text/plain": {"schema": {"type": "string", "example": "OK"}},
+              "application/json": {"schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {"status": {"type": "string", "example": "ready"}}
+              }}
+            }
+          },
+          "401": {"description": "Provide a valid Apify API token."},
+          "403": {"description": "The caller cannot access this endpoint."}
+        }
+      },
+      "post": {
+        "operationId": "transcribeInstagramReel",
+        "summary": "Transcribe one public Instagram Reel",
+        "description": "Send one Reel URL, shortcode, or Instagram media URL. The response contains the transcript, timed segments, opening hook, subtitles, and a request receipt.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/TranscriptionRequest"},
+              "example": {
+                "reelUrl": "https://www.instagram.com/reel/DS46KJNjva9/",
+                "language": "auto",
+                "wordLevelTimestamps": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The selected video's result and receipt. Read each row's status and error code for skipped or partial results.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TranscriptionResponse"}}}
+          },
+          "400": {
+            "description": "Invalid input or a request for more than one video. A batch referral includes the native run endpoint.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RequestError"}}}
+          },
+          "401": {"description": "Provide a valid Apify API token."},
+          "403": {"description": "Send the request through the authenticated ReelSaid Standby endpoint."},
+          "413": {"description": "The request body is too large."},
+          "415": {"description": "Use application/json for the request body."},
+          "429": {"description": "Apify is applying its request limit."},
+          "503": {
+            "description": "A dependency is temporarily unavailable. The response indicates whether to retry.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RequestError"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apifyToken": {"type": "http", "scheme": "bearer", "description": "Use your Apify API token."}
+    },
+    "schemas": {
+      "TranscriptionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "oneOf": [{"required": ["reelUrl"]}, {"required": ["startUrls"]}, {"required": ["shortcodes"]}],
+        "properties": {
+          "reelUrl": {"type": "string", "format": "uri", "description": "One public Instagram video or signed Instagram media URL."},
+          "startUrls": {
+            "oneOf": [
+              {"type": "string", "format": "uri"},
+              {"type": "array", "minItems": 1, "maxItems": 1, "items": {"oneOf": [
+                {"type": "string", "format": "uri"},
+                {"type": "object", "required": ["url"], "properties": {"url": {"type": "string", "format": "uri"}}}
+              ]}}
+            ],
+            "description": "The same URL in native Apify input format."
+          },
+          "shortcodes": {
+            "oneOf": [
+              {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+              {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"}}
+            ]
+          },
+          "language": {"type": "string", "default": "auto", "example": "es", "description": "Use auto or a supported language code."},
+          "preferCaptions": {"type": "boolean", "default": true},
+          "wordLevelTimestamps": {"type": "boolean", "default": false},
+          "includeSrt": {"type": "boolean", "default": true},
+          "includeVtt": {"type": "boolean", "default": true},
+          "forceRefresh": {"type": "boolean", "default": false},
+          "maxTotalChargeUsd": {
+            "type": "number", "nullable": true, "minimum": 0,
+            "description": "Optional upper limit on transcript event charges for this request."
+          },
+          "maxDurationSeconds": {"type": "number", "minimum": 0},
+          "minDurationSeconds": {"type": "number", "minimum": 0},
+          "minViews": {"type": "integer", "minimum": 0},
+          "minLikes": {"type": "integer", "minimum": 0},
+          "dateFrom": {"type": "string", "format": "date"},
+          "dateTo": {"type": "string", "format": "date"},
+          "lastDays": {"type": "integer", "minimum": 1},
+          "skipPinned": {"type": "boolean"},
+          "sort": {"type": "string", "enum": ["newest", "mostViewed"]},
+          "maxResults": {"type": "integer", "minimum": 1}
+        }
+      },
+      "TranscriptionResponse": {
+        "type": "object",
+        "required": ["requestId", "rows", "summary", "delivered", "charged", "notes"],
+        "properties": {
+          "requestId": {"type": "string"},
+          "rows": {"type": "array", "items": {"$ref": "#/components/schemas/Result"}},
+          "summary": {
+            "type": "object",
+            "description": "Counts, outcome reasons, and billing fields for this request.",
+            "properties": {
+              "successful": {"type": "integer"},
+              "partial": {"type": "integer"},
+              "failed": {"type": "integer"},
+              "skipped": {"type": "integer"},
+              "cached": {"type": "integer"},
+              "stopReason": {"type": "string", "nullable": true},
+              "confirmedChargeUsd": {"type": "number", "nullable": true}
+            }
+          },
+          "delivered": {"type": "integer", "minimum": 0},
+          "charged": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+          "notes": {"type": "array", "items": {"type": "string"}}
+        }
+      },
+      "Result": {
+        "type": "object",
+        "required": ["status", "errorCode", "retryable", "transcript", "segments", "metadata"],
+        "properties": {
+          "status": {"type": "string"},
+          "errorCode": {"type": "string", "nullable": true},
+          "retryable": {"type": "boolean"},
+          "transcript": {"type": "string", "nullable": true},
+          "transcriptSource": {"type": "string", "nullable": true, "enum": ["asr", "captions", null]},
+          "language": {"type": "string", "nullable": true},
+          "durationSeconds": {"type": "number", "nullable": true},
+          "wordCount": {"type": "integer", "nullable": true, "minimum": 0},
+          "segments": {"type": "array", "items": {"$ref": "#/components/schemas/Timing"}},
+          "wordLevelTimestamps": {"type": "array", "nullable": true, "items": {"$ref": "#/components/schemas/Timing"}},
+          "hook": {"type": "object", "nullable": true},
+          "metadata": {"type": "object", "nullable": true},
+          "quality": {"type": "object"},
+          "cached": {"type": "boolean"},
+          "charged": {"type": "boolean", "nullable": true},
+          "billedMinutes": {"type": "integer", "nullable": true},
+          "chargedEvents": {"type": "object", "nullable": true, "additionalProperties": {"type": "integer"}},
+          "confirmedChargeUsd": {"type": "number", "nullable": true},
+          "subtitles": {"type": "object", "properties": {
+            "srt": {"$ref": "#/components/schemas/Subtitle"},
+            "vtt": {"$ref": "#/components/schemas/Subtitle"}
+          }}
+        }
+      },
+      "Timing": {
+        "type": "object",
+        "required": ["text", "startSeconds", "endSeconds"],
+        "properties": {
+          "text": {"type": "string"},
+          "startSeconds": {"type": "number"},
+          "endSeconds": {"type": "number"}
+        }
+      },
+      "Subtitle": {
+        "type": "object",
+        "nullable": true,
+        "required": ["key", "contentType", "content"],
+        "properties": {
+          "key": {"type": "string"},
+          "contentType": {"type": "string"},
+          "content": {"type": "string", "description": "Save this UTF-8 text as an SRT or WebVTT file."}
+        }
+      },
+      "RequestError": {
+        "type": "object",
+        "required": ["status", "errorCode", "retryable"],
+        "properties": {
+          "status": {"type": "string", "example": "failed"},
+          "errorCode": {"type": "string", "example": "INVALID_INPUT"},
+          "retryable": {"type": "boolean"},
+          "requestId": {"type": "string"},
+          "nativeRunUrl": {"type": "string", "format": "uri"}
+        }
+      }
+    }
+  }
+}

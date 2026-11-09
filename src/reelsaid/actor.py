@@ -32,6 +32,10 @@ class Output(Protocol):
     async def put(self, key: str, value: object, content_type: str = "application/json") -> None: ...
 
 
+class MultipleVideos(ValueError):
+    """The caller requested one selected video but discovery resolved several."""
+
+
 @dataclass(frozen=True, kw_only=True)
 class ActorContext(RunContext):
     output: Output
@@ -44,6 +48,7 @@ class ActorContext(RunContext):
     read_previous: Callable[[str], Awaitable[list[JsonObject]]] | None = None
     claim_wait_seconds: float = 3.0
     concurrency: int = 1
+    single_video: bool = False
 
 
 class _Order:
@@ -246,6 +251,8 @@ class _Run:
             if retries.continuation:
                 self.retry_sources.update(sorted(retried)[retries.continuation.source_index:])
         for found in batches:
+            if self.context.single_video and len(found.videos) + len(found.video_outcomes) > 1:
+                raise MultipleVideos
             self.duplicates += found.duplicates
             for outcome in found.input_outcomes:
                 await self._input_row(outcome)

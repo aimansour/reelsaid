@@ -67,6 +67,12 @@ class LocalOutput:
 
 
 async def main() -> None:
+    if Actor.configuration.meta_origin == "STANDBY":
+        from .standby import serve_standby
+
+        async with Actor:
+            await serve_standby()
+        return
     async with Actor, AsyncSession(impersonate="chrome", trust_env=False) as web, AsyncSession(trust_env=False) as provider_http:
         env = Actor.get_env()
         raw = await Actor.get_input() or {}

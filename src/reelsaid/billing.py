@@ -167,6 +167,7 @@ class RunPricing:
     base: Decimal
     minute: Decimal
     charges_enabled: bool
+    amount_is_exact: bool = True
 
     def quote(self, duration_seconds: float) -> ChargeQuote:
         return quote(duration_seconds, "effective", base_prices={"effective": self.base}, minute_price=self.minute)
@@ -178,14 +179,7 @@ class RunPricing:
         pricing = run.pricing_info
         if pricing is None or pricing.pricing_model == "FREE":
             return cls(RunBudget(cap), PROPOSED_BASE.get(tier, PROPOSED_BASE["FREE"]), PROPOSED_MINUTE, False)
-        paid_by_user = getattr(pricing, "is_ppe_platform_usage_paid_by_user", False) or getattr(
-            pricing, "isPPEPlatformUsagePaidByUser", False,
-        )
-        if pricing.pricing_model != "PAY_PER_EVENT" or paid_by_user:
-            raise BillingError("Run pricing must cover all platform usage through transcript events")
-        events = pricing.pricing_per_event.actor_charge_events or {}
-        if set(events) != {BASE_EVENT, MINUTE_EVENT} or any(item.is_one_time_event for item in events.values()):
-            raise BillingError("Unexpected transcript event configuration")
+        events = cls._transcript_events(pricing)
 
         def price(event: str) -> Decimal:
             item = events[event]
@@ -205,6 +199,35 @@ class RunPricing:
         return cls(RunBudget(cap, spent=spent, confirmed_events=counts, blocked=bool(journal.get("pendingClaimId"))),
                    base, minute, True)
 
+    @staticmethod
+    def _transcript_events(pricing):
+        paid_by_user = getattr(pricing, "is_ppe_platform_usage_paid_by_user", False) or getattr(
+            pricing, "isPPEPlatformUsagePaidByUser", False,
+        )
+        if pricing.pricing_model != "PAY_PER_EVENT" or paid_by_user:
+            raise BillingError("Run pricing must cover all platform usage through transcript events")
+        events = pricing.pricing_per_event.actor_charge_events or {}
+        if set(events) != {BASE_EVENT, MINUTE_EVENT} or any(item.is_one_time_event for item in events.values()):
+            raise BillingError("Unexpected transcript event configuration")
+        return events
+
+    @classmethod
+    def from_standby(cls, pricing, cap: Decimal | None) -> "RunPricing":
+        budget = RunBudget(cap)
+        if pricing is None or pricing.pricing_model == "FREE":
+            return cls(budget, PROPOSED_BASE["FREE"], PROPOSED_MINUTE, False)
+        events = cls._transcript_events(pricing)
+        rates = []
+        for event in (BASE_EVENT, MINUTE_EVENT):
+            item = events[event]
+            prices = {money(entry.tiered_event_price_usd) for entry in (item.event_tiered_pricing_usd or {}).values()}
+            if item.event_price_usd is not None:
+                prices.add(money(item.event_price_usd))
+            if not prices:
+                raise BillingError("No price is configured for a transcript event")
+            rates.append(prices)
+        return cls(budget, max(rates[0]), max(rates[1]), True, all(len(prices) == 1 for prices in rates))
+
 
 class ChargeProvider(Protocol):
     async def counts(self) -> dict[str, int] | None: ...
@@ -214,10 +237,14 @@ class ChargeProvider(Protocol):
 class ApifyCharges:
     """The caller supplies the original run client with automatic retries disabled."""
 
-    def __init__(self, run):
+    def __init__(self, run, *, request_id: str | None = None):
         self._run = run
+        self._request_id = request_id
 
     async def counts(self) -> dict[str, int] | None:
+        if self._request_id is not None:
+            # Multi-tenant run aggregates cannot confirm a particular caller's event.
+            return {}
         try:
             details = await self._run.get(timeout="short")
         except ApifyClientError:
@@ -226,7 +253,8 @@ class ApifyCharges:
 
     async def charge(self, event: str, count: int, key: str) -> bool:
         try:
-            await self._run.charge(event, count=count, idempotency_key=key, timeout="short")
+            attribution = {"request_id": self._request_id} if self._request_id is not None else {}
+            await self._run.charge(event, count=count, idempotency_key=key, timeout="short", **attribution)
         except ApifyClientError:
             return False
         return True
