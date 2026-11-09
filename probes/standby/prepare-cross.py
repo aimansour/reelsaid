@@ -19,3 +19,7 @@ identities = {caller(os.environ[key]) for key in ("APIFY_TOKEN", "APIFY_STANDBY_
 if len(identities) != 2:
     raise RuntimeError("Two distinct authorized Apify accounts are required.")
 path.write_text(f"CALLER_HASHES = frozenset({tuple(sorted(identities))!r})\n")
+definition_path = path.parent / ".actor" / "actor.json"
+definition = json.loads(definition_path.read_text())
+definition["usesStandbyMode"] = False
+definition_path.write_text(json.dumps(definition, indent=2) + "\n")

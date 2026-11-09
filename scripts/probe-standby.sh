@@ -8,7 +8,17 @@ mode=${1:-SINGLE_TENANT}
 package=probes/standby
 if [[ $mode == CROSS ]]; then
     workspace=$(mktemp -d)
-    trap 'rm -rf -- "$workspace"' EXIT
+    cleanup_cross() {
+        local result=$?
+        if apify api GET "acts/$actor" --user-agent "$user_agent" |
+            jq -e '.data.isPublic == true and .data.actorStandby.isEnabled == true' >/dev/null; then
+            apify api PUT "acts/$actor" -d '{"isDeprecated":true,"actorStandby":{"isEnabled":false}}' \
+                --user-agent "$user_agent" >/dev/null || result=1
+        fi
+        rm -rf -- "$workspace"
+        exit "$result"
+    }
+    trap cleanup_cross EXIT
     cp -R probes/standby/. "$workspace/"
     python3 probes/standby/prepare-cross.py "$workspace/qa_callers.py"
     package=$workspace
