@@ -1,12 +1,12 @@
 {
     "title": "ReelSaid — Instagram Reels Transcript API",
-    "description": "Turn public Instagram Reels, video posts, carousels, and profiles into original-language transcripts, timed segments, three-second hooks, and SRT or WebVTT subtitles. Submit Reel links, shortcodes, Instagram media URLs, or an Apify dataset. Replace the prefilled spoken Reel or submit it explicitly to try ReelSaid.",
+    "description": "Paste a public Reel link and select Start to get its transcript, first-three-second hook, and subtitles. Try the prefilled spoken Reel as a normal transcription, or use your own links, a public profile, shortcodes, or an Apify dataset. Transcripts stay in the spoken language.",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
         "startUrls": {
             "title": "Instagram URLs",
-            "description": "Enter one URL or a list. Accepts public Instagram Reels, video posts, carousels, profile URLs, and direct Instagram CDN video or audio URLs.",
+            "description": "Paste one public Instagram link per line. Use Reel, post, IGTV, share, or profile links, or a direct Instagram CDN video or audio URL. Clear the example when running only a profile or dataset.",
             "type": "array",
             "editor": "stringList",
             "prefill": ["https://www.instagram.com/reel/DS46KJNjva9/"]

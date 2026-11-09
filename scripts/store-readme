@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Apify renders the listing title above this Markdown.
+awk '/^# / && !heading {heading=1; next} heading && (NF || body) {body=1; print} END {if (!body) exit 1}' "$1"

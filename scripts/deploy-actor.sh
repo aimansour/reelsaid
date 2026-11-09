@@ -11,7 +11,7 @@ cp src/reelsaid/*.py "$package/src/reelsaid/"
 cp Dockerfile .dockerignore pyproject.toml uv.lock "$package/"
 cp scripts/install-quality-models "$package/scripts/"
 if [[ -n $public_package ]]; then
-    cp -- "$public_package/README.md" "$package/.actor/README.md"
+    bash scripts/store-readme "$public_package/README.md" > "$package/.actor/README.md"
 fi
 user_agent=apify-agent-skills/apify-actor-development
 push=$(apify actors push --dir "$package" --build-tag "$build_tag" \

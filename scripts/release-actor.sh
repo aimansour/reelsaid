@@ -116,7 +116,8 @@ case "$mode" in
         smoke "$build_id" true
         fresh_run=$(jq -er .data.id "$scratch/run.json")
         build_number=$(jq -er .data.buildNumber "$scratch/build.json")
-        jq -ej .data.actorDefinition.readme "$scratch/build.json" | cmp - "$PACKAGE_ROOT/README.md"
+        bash scripts/store-readme "$PACKAGE_ROOT/README.md" > "$scratch/store-readme.md"
+        jq -ej .data.actorDefinition.readme "$scratch/build.json" | cmp - "$scratch/store-readme.md"
         apify api GET "$actor/versions/0.1" > "$scratch/version.json"
         jq -e '.data.applyEnvVarsToBuild == false and .data.buildTag == "candidate" and
             any(.data.envVars[]; .name == "REELSAID_GROQ_KEYS" and .isSecret == true) and

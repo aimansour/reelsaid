@@ -2,12 +2,14 @@ import json
 import os
 import re
 import struct
+import subprocess
 from pathlib import Path
 
 import pytest
 from jsonschema import Draft7Validator
 
 from reelsaid.input import parse_input
+from reelsaid.standby import _input as parse_standby_input
 
 
 EXAMPLE_FILES = ("reel", "profile", "dataset")
@@ -51,6 +53,28 @@ def test_public_output_matches_actor_schema(package):
     assert row["wordCount"] == len(row["wordLevelTimestamps"])
     assert row["metadata"]["caption"] is None
     assert all(reference is None for reference in row["subtitles"].values())
+
+
+def test_package_has_no_code_first_run_and_standby_example(package):
+    standby = read_json(package / "examples/api/standby.json")
+    spec = read_json(Path(".actor/web_server_schema.json"))
+    request = spec["paths"]["/"]["post"]["requestBody"]["content"]["application/json"]
+    assert standby == request["example"]
+    Draft7Validator(spec["components"]["schemas"]["TranscriptionRequest"]).validate(standby)
+    options, _, issue = parse_standby_input(standby)
+    assert issue is None and options["startUrls"] == read_json(package / "examples/api/reel.json")["startUrls"]
+
+    readme = (package / "README.md").read_text()
+    trial = readme.index("## Transcribe your first Reel")
+    code = readme.index("```bash")
+    first_run = readme[trial:code]
+    assert "Instagram URLs" in first_run and "**Start**" in first_run
+    assert "## What you get" in first_run and "## What you can do with Reel transcripts" in first_run
+    assert "Every Reel, in Words." in readme[:trial] and "Whisper Large-v3" in readme[:code]
+    assert "aimansour--reelsaid.apify.actor" in readme and "examples/api/standby.json" in readme
+    store_readme = subprocess.check_output(["bash", "scripts/store-readme", package / "README.md"], text=True)
+    assert store_readme == readme[readme.index("**Every Reel, in Words.**"):]
+    assert not re.search(r"^# ", store_readme, re.MULTILINE)
 
 
 def test_automation_templates_send_the_verified_example(package):

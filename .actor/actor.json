@@ -2,7 +2,7 @@
     "actorSpecification": 1,
     "name": "reelsaid",
     "title": "ReelSaid — Instagram Reels Transcript API",
-    "description": "Transcribe Instagram Reels to text in bulk with Whisper Large-v3. Get original-language transcripts, word timestamps, three-second hooks, SRT, WebVTT, and post metadata from public Reel links, profiles, or datasets.",
+    "description": "Transcribe public Instagram Reels to text with Whisper Large-v3. Get original-language transcripts, opening hooks, word timestamps, SRT and WebVTT, and post metadata. Send one Reel to the live API or process links, profiles, and datasets in bulk.",
     "version": "0.1",
     "buildTag": "latest",
     "dockerfile": "../Dockerfile",
