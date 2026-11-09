@@ -18,7 +18,9 @@ case "$1 $2 $3" in
     'actors push --dir')
         printf '%s\\n' '{"build":{"id":"candidate","status":"READY"}}' ;;
     'api GET actor-builds/candidate')
-        printf '{"data":{"id":"candidate","actId":"actor","status":"%s","buildNumber":"0.1.20"}}\\n' "$TEST_BUILD_STATUS" ;;
+        printf '{"data":{"id":"candidate","actId":"actor","status":"%s","buildNumber":"0.1.20","details":"' "$TEST_BUILD_STATUS"
+        awk 'BEGIN { for (i=0; i<140000; i++) printf "x" }'
+        printf '%s\\n' '"}}' ;;
     'api GET acts/actor')
         printf '%s\\n' '{"data":{"taggedBuilds":{"private-check":{"buildId":"candidate"}}}}' ;;
     *) exit 99 ;;
