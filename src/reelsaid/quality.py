@@ -16,6 +16,7 @@ from .media import MediaClient, MediaError, MediaPlan
 
 MAX_BILLABLE_DEFECT = 0.20
 MIN_DEFECT_SECONDS = 0.12
+TRAILING_SPEECH_MARGIN = 0.55
 TranscriptSource = Literal["captions", "asr"]
 FREE_SPEECH_ERRORS = {
     "silence": "SILENCE", "music_only": "MUSIC_ONLY", "no_speech": "NO_SPEECH", "no_audio": "NO_AUDIO",
@@ -166,7 +167,7 @@ def _suspect(draft: TranscriptDraft, media: MediaPlan) -> bool:
     if draft.words:
         first_word = min(word.start for word in draft.words)
         last_word = max(word.end for word in draft.words)
-        if first_word > min(.45, edge) or duration - last_word > min(.55, edge):
+        if first_word > min(.45, edge) or duration - last_word > min(TRAILING_SPEECH_MARGIN, edge):
             return True
     if sum(end - start for start, end in spans) < duration * .60:
         return True
@@ -270,8 +271,33 @@ def _clip(entries, duration: Decimal):
     timeline = float(duration)
     return tuple(
         replace(entry, start=max(0, entry.start), end=min(timeline, entry.end))
-        for entry in entries if min(timeline, entry.end) > max(0, entry.start)
+        for entry in sorted(entries, key=lambda entry: entry.start)
+        if min(timeline, entry.end) > max(0, entry.start)
     )
+
+
+def _assess_draft(draft, evidence, duration, source):
+    assessment = assess(draft, evidence, duration)
+    unsupported = tuple((defect.start, defect.end) for defect in assessment.defects
+                        if defect.reason == "unsupported_speech")
+    if source != "asr" or not unsupported:
+        return draft, assessment
+    boundary = max(end for _, end in evidence.voiced) + TRAILING_SPEECH_MARGIN
+    text = draft.text.rstrip()
+    retained = len(draft.segments)
+    for segment in reversed(draft.segments):
+        suffix = segment.text.strip()
+        if (segment.start < boundary or not suffix or not text.endswith(suffix)
+                or not _overlap(segment.start, segment.end, unsupported)):
+            break
+        text = text.removesuffix(suffix).rstrip()
+        retained -= 1
+    if not retained or not text or retained == len(draft.segments):
+        return draft, assessment
+    tail_start = min(entry.start for entry in draft.segments[retained:])
+    cleaned = replace(draft, text=text, segments=draft.segments[:retained],
+                      words=tuple(word for word in draft.words if word.end <= tail_start))
+    return cleaned, assess(cleaned, evidence, duration)
 
 
 def _result(media, draft, source, evidence, assessment, billable) -> TranscriptResult:
@@ -324,22 +350,22 @@ async def evaluate_video(
             if initial.value is None:
                 return Outcome(initial.status, initial.error_code, initial.retryable)
             draft = initial.value
-        quality = assess(draft, evidence, media.duration_seconds)
+        draft, quality = _assess_draft(draft, evidence, media.duration_seconds, source)
         if source == "captions" and (quality.affected_fraction is None or quality.needs_repair):
             fallback = await asr(inspected, options, context)
             if fallback.value:
                 draft, source = fallback.value, "asr"
-                quality = assess(draft, evidence, media.duration_seconds)
+                draft, quality = _assess_draft(draft, evidence, media.duration_seconds, source)
         retryable = False
         if quality.needs_repair and not context.expired():
             repair = await _repair(inspected, options, context, draft, quality, asr)
             retryable = repair.retryable
             if repair.value and _usable(repair.value):
-                reassessed = assess(repair.value, evidence, media.duration_seconds)
+                repaired, reassessed = _assess_draft(repair.value, evidence, media.duration_seconds, "asr")
                 if reassessed.affected_fraction is not None and (
                     not _usable(draft) or reassessed.affected_fraction < quality.affected_fraction
                 ):
-                    draft, source, quality = repair.value, "asr", reassessed
+                    draft, source, quality = repaired, "asr", reassessed
         if not _usable(draft):
             return Outcome("failed", "TRANSCRIPTION_FAILED", retryable, _result(
                 media, None, None, evidence, quality, False,

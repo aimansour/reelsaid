@@ -41,6 +41,7 @@ class MediaAsset:
     has_video: bool
     source_bytes: int
     file: Path | None = None
+    audio_span: tuple[Decimal, Decimal] | None = None
 
 
 @dataclass(frozen=True)
@@ -97,11 +98,22 @@ def _contains_complete_mp4_index(data: bytes) -> bool:
     return False
 
 
-async def _probe(path: Path) -> tuple[Decimal, bool, bool]:
+def _stream_span(stream: dict) -> tuple[Decimal, Decimal] | None:
+    try:
+        start = Decimal(stream.get("start_time", "NaN"))
+        duration = Decimal(stream.get("duration", "NaN"))
+    except (TypeError, InvalidOperation):
+        return None
+    if start.is_finite() and duration.is_finite() and duration > 0:
+        return start, start + duration
+    return None
+
+
+async def _probe(path: Path) -> tuple[Decimal, bool, bool, tuple[Decimal, Decimal] | None]:
     try:
         process = await asyncio.create_subprocess_exec(
             "ffprobe", "-v", "error", "-protocol_whitelist", "file", "-format_whitelist", LOCAL_MEDIA_FORMATS,
-            "-show_entries", "format=duration:stream=codec_type:stream_disposition=attached_pic",
+            "-show_entries", "format=duration:stream=codec_type,start_time,duration:stream_disposition=attached_pic",
             "-of", "json", str(path),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
         )
@@ -122,13 +134,13 @@ async def _probe(path: Path) -> tuple[Decimal, bool, bool]:
             info = json.loads(data)
             duration = Decimal(info.get("format", {}).get("duration", "NaN"))
             streams = info.get("streams", [])
-            audio = any(stream.get("codec_type") == "audio" for stream in streams)
+            audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
             video = any(
                 stream.get("codec_type") == "video" and not stream.get("disposition", {}).get("attached_pic")
                 for stream in streams
             )
             if duration.is_finite() and duration > 0 and (audio or video):
-                return duration, audio, video
+                return duration, audio is not None, video, _stream_span(audio) if audio else None
         except (ValueError, InvalidOperation):
             pass
     raise MediaError("MEDIA_DURATION_UNAVAILABLE")
@@ -239,16 +251,16 @@ class MediaClient:
                 index = path.read_bytes() if not complete else b""
             if not complete and _contains_complete_mp4_index(index):
                 try:
-                    duration, audio, video = await _probe(path)
-                    return MediaAsset(resolved, duration, audio, video, total)
+                    duration, audio, video, span = await _probe(path)
+                    return MediaAsset(resolved, duration, audio, video, total, audio_span=span)
                 except MediaError:
                     pass
             if not complete:
                 path.unlink(missing_ok=True)
                 path, resolved, total = await self._download(resolved, now)
-            duration, audio, video = await _probe(path)
+            duration, audio, video, span = await _probe(path)
             keep = True
-            return MediaAsset(resolved, duration, audio, video, total, path)
+            return MediaAsset(resolved, duration, audio, video, total, path, audio_span=span)
         except OSError as error:
             raise MediaError("MEDIA_INSPECTION_FAILED", retryable=True) from error
         finally:

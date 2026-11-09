@@ -68,6 +68,31 @@ def test_music_silence_and_speech():
     assert spoken.value.billable and "música" in spoken.value.text
 
 
+def test_verified_unsupported_tail_is_removed_from_text_and_timestamps():
+    initial = TranscriptDraft(
+        "Real ending. Thank you.", "en",
+        (Segment("Real ending.", 0, 4), Segment("Thank you.", 9.8, 10)),
+        (Word("Real", 0, 2), Word("ending.", 2, 4), Word("Thank", 9.8, 9.9), Word("you.", 9.9, 10)), 10,
+    )
+    outcome, calls = evaluate(media(), SpeechEvidence("speech", ((0, 4),), .99), initial)
+    assert outcome.status == "success" and outcome.value.billable
+    assert outcome.value.text == "Real ending."
+    assert [entry.text for entry in outcome.value.segments] == ["Real ending."]
+    assert [entry.text for entry in outcome.value.words] == ["Real", "ending."]
+    assert calls == [None]
+    audible, _ = evaluate(media(), SpeechEvidence("speech", ((0, 4), (9.8, 10)), .99), initial)
+    assert audible.value.text == initial.text
+
+
+def test_overlapping_segments_are_ordered_by_start_without_reordering_transcript():
+    initial = draft((0, 4, "First sentence."), (4.54, 4.68, "Yes."),
+                    (4.3, 10, "The speaker continues."),
+                    text="First sentence. Yes. The speaker continues.")
+    outcome, _ = evaluate(media(), SpeechEvidence("speech", ((0, 4), (4.3, 10)), .99), initial)
+    assert outcome.value.text == initial.text
+    assert [entry.start for entry in outcome.value.segments] == [0, 4.3, 4.54]
+
+
 def test_verified_licensed_music_avoids_asr_while_mixed_speech_is_transcribed():
     plan = media()
     plan = replace(plan, ref=replace(

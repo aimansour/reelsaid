@@ -1,6 +1,7 @@
 import asyncio
 import subprocess
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from reelsaid import media as media_module
+from reelsaid.audio_quality import verified_audio
 from reelsaid.contracts import InputRef, RunContext, VideoMetadata, VideoRef
 from reelsaid.discovery import discover
 from reelsaid.input import parse_input
@@ -127,6 +129,36 @@ def test_large_fast_start_index_extends_range_without_downloading_video(samples,
     assert result.value.video.file is None
     assert len(session.requests) == 2 and all(header for _, header in session.requests)
     assert not list(tmp_path.iterdir())
+
+
+def test_shorter_audio_sidecar_uses_the_audio_timeline_and_preserves_video_duration(samples, tmp_path, monkeypatch):
+    video = tmp_path / "source.mp4"
+    audio = tmp_path / "sound.m4a"
+    combined = tmp_path / "combined.mp4"
+    video.write_bytes(samples[0])
+    audio.write_bytes(samples[1])
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-i", str(video), "-i", str(audio),
+        "-c", "copy", "-movflags", "+faststart", str(combined),
+    ], check=True)
+    monkeypatch.setattr(media_module, "PROBE_BYTES", 8192)
+    session = Session({VIDEO: combined.read_bytes(), AUDIO: samples[1]})
+    ctx = context(session, tmp_path=tmp_path)
+
+    async def check():
+        outcome = await inspect_media(replace(ref(VIDEO), dash_audio_url=AUDIO), ctx)
+        plan = outcome.value
+        try:
+            assert plan.duration_seconds == Decimal(4)
+            assert plan.audio.file is None
+            async with verified_audio(plan, ctx) as (_, inspected):
+                assert inspected.audio.url == AUDIO
+                assert inspected.duration_seconds == Decimal(4)
+            assert (VIDEO, None) not in session.requests
+        finally:
+            plan.close()
+
+    asyncio.run(check())
 
 
 def test_stable_cdn_identity():

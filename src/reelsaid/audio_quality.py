@@ -13,7 +13,7 @@ import numpy as np
 from curl_cffi.requests import AsyncSession
 
 from .contracts import RunContext
-from .media import LOCAL_MEDIA_FORMATS, MediaClient, MediaError, MediaPlan
+from .media import LOCAL_MEDIA_FORMATS, MediaAsset, MediaClient, MediaError, MediaPlan
 
 
 RATE = 16000
@@ -136,6 +136,14 @@ async def _decode_audio(path: Path) -> bytes:
     return data
 
 
+def _aligned_audio(primary: MediaAsset, alternate: MediaAsset) -> bool:
+    if primary.audio_span and alternate.audio_span:
+        start, end = primary.audio_span
+        other_start, other_end = alternate.audio_span
+        return abs(start - other_start) <= Decimal("0.05") and abs(end - other_end) <= Decimal("0.35")
+    return abs(primary.duration_seconds - alternate.duration_seconds) <= Decimal("0.35")
+
+
 async def _speech_asset(media: MediaPlan, client: MediaClient, context: RunContext):
     asset = media.audio
     sidecar = media.ref.dash_audio_url
@@ -143,8 +151,7 @@ async def _speech_asset(media: MediaPlan, client: MediaClient, context: RunConte
         candidate = None
         try:
             candidate = await client.inspect(sidecar, context.now)
-            aligned = abs(candidate.duration_seconds - asset.duration_seconds) <= Decimal("0.35")
-            if candidate.has_audio and not candidate.has_video and aligned:
+            if candidate.has_audio and not candidate.has_video and _aligned_audio(asset, candidate):
                 return candidate, await client.materialize(candidate)
         except MediaError:
             pass

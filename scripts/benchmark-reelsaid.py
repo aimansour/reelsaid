@@ -13,7 +13,7 @@ actor = "aimansour~reelsaid"
 campaign = "allocation"
 
 
-def native_baseline(build, *, timings=False):
+def native_baseline(build, *, timings=False, compare_policies=False):
     store = request("GET", f"key-value-stores/{store_name}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
@@ -25,15 +25,25 @@ def native_baseline(build, *, timings=False):
         "panel": ["panel-captioned"],
         "batch": ["field-report-captioned", "interview-captioned"],
     }
-    for name, references in cases.items():
+    experiments = [(name, references, "conditional", None) for name, references in cases.items()]
+    if compare_policies:
+        experiments.extend(
+            (name, cases[name], policy, None) for policy in ("before", "after") for name in ("extended", "music")
+        )
+        experiments.extend(("extended", cases["extended"], "conditional", memory) for memory in (512, 1024))
+    for name, references, policy, memory in experiments:
         urls = [fixtures[reference]["url"] for reference in references]
-        record = f"key-value-stores/{store['id']}/records/native-{build}-{name}"
-        benchmark(actor, {"startUrls": urls, "forceRefresh": True}, 0.20, record,
-                  build=build, case=name, cache_condition="fresh",
+        label = f"{name}-{memory or policy}" if memory or policy != "conditional" else name
+        record = f"key-value-stores/{store['id']}/records/native-{build}-{label}"
+        payload = {"startUrls": urls, "forceRefresh": True}
+        if policy != "conditional":
+            payload["_reelsaidTimingPolicy"] = policy
+        benchmark(actor, payload, 0.20, record,
+                  build=build, case=name, cache_condition="fresh", memory=memory,
                   requested_ids=[url.strip("/").split("/")[-1] for url in urls], timings=timings)
         observation = market["read_record"](record)
         if observation.get("status") != "SUCCEEDED" or (timings and not observation.get("timings")):
-            raise RuntimeError(f"Baseline observation failed: {name}")
+            raise RuntimeError(f"Baseline observation failed: {label}")
 
 
 def main():
@@ -68,8 +78,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--native-baseline", metavar="BUILD")
     parser.add_argument("--require-timings", action="store_true")
+    parser.add_argument("--compare-policies", action="store_true")
     args = parser.parse_args()
     if args.native_baseline:
-        native_baseline(args.native_baseline, timings=args.require_timings)
+        native_baseline(args.native_baseline, timings=args.require_timings, compare_policies=args.compare_policies)
     else:
         main()
