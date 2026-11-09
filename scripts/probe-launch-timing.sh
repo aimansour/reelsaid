@@ -6,6 +6,7 @@ mode=${2:-timing}
 case "$mode" in
     timing) check=--compare-policies ;;
     startup|cached-base) check=--startup-check ;;
+    lean-media) check=--lean-media-check ;;
     native) check= ;;
     *) exit 2 ;;
 esac
@@ -66,6 +67,14 @@ if sys.argv[3] == "cached-base":
     base = "FROM apify/actor-python:3.12@sha256:5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a"
     if not dockerfile.read_text().startswith(base + "\n"):
         edit(dockerfile, {"FROM python:3.12-slim-bookworm": base})
+if sys.argv[3] == "lean-media":
+    dockerfile = root.parents[1] / "Dockerfile"
+    edit(dockerfile, {
+        "RUN apt-get update \\\n    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg \\\n"
+        "    && rm -rf /var/lib/apt/lists/*": "COPY --from=media-tools /native/ /usr/local/",
+    })
+    tools = Path("scripts/lean-media.Dockerfile").read_text()
+    dockerfile.write_text(tools + "\n" + dockerfile.read_text())
 edit(root / "__main__.py", {
     "import asyncio": "from . import _launch_timing as timing\n\nimport asyncio",
     '        env = Actor.get_env()': (
@@ -117,6 +126,9 @@ if [[ -n $check ]]; then
     tag=launch-timing
 fi
 stage=deployment
+if [[ $mode == lean-media ]]; then
+    export REELSAID_BUILD_WAIT_SECONDS=660
+fi
 bash "$project/scripts/deploy-actor.sh" "$public_package" "$tag" >"$scratch/build.json"
 stage=build-receipt
 build_id=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/build.json")
@@ -127,6 +139,9 @@ stage=default-check
 options=(--native-baseline "$build")
 if [[ -n $check ]]; then
     options+=(--require-timings "$check")
+    if [[ $mode == lean-media ]]; then
+        options+=(--verify-native)
+    fi
 else
     options+=(--verify-native)
 fi

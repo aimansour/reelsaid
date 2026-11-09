@@ -17,7 +17,9 @@ user_agent=apify-agent-skills/apify-actor-development
 push=$(apify actors push --dir "$package" --build-tag "$build_tag" \
     --no-apply-env-vars-to-build --wait-for-finish 0 --json --user-agent "$user_agent")
 build_id=$(jq -er '.build.id' <<< "$push")
-deadline=$((SECONDS + 300))
+build_wait=${REELSAID_BUILD_WAIT_SECONDS:-300}
+[[ $build_wait =~ ^[1-9][0-9]{0,3}$ ]]
+deadline=$((SECONDS + build_wait))
 while (( SECONDS < deadline )); do
     build=$(apify api GET "actor-builds/$build_id" --user-agent "$user_agent")
     status=$(jq -er --arg id "$build_id" '.data | select(.id == $id) | .status' <<< "$build")

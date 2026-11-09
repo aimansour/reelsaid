@@ -45,3 +45,19 @@ In the hosted 512 MB extended case, the SDK-ready mark moved from 1.420 to 0.843
 Apify documents its standardized images as pre-cached on worker machines. A second matched cloud experiment used a digest-pinned official Python base with the same lockfile, precompilation, fixtures, and observer. The official image passed the caption and free-music checks. It produced the fastest observed 60-second result at 256 MB, at 5.27 seconds first and 6.12 seconds total. It also reduced the observed cold batch from 12.24 seconds first and 13.62 seconds total to 10.01 and 10.89 seconds. Other runs still had platform-to-process delays close to five seconds. Keep cold and low-startup observations separate. [Apify runtime caching](https://docs.apify.com/actors/development/performance#use-standardized-images-to-accelerate-actor-startup-times) · [Hosted base image comparison](https://github.com/aimansour/reelsaid/actions/runs/42559918421)
 
 The official-base wildlife run at 256 MB delivered first text in 5.91 seconds and finished in 6.80. At 512 MB it delivered first text in 6.02 seconds and finished in 6.49. The total difference was smaller than the 0.35-second polling interval, and the 512 MB run consumed 0.000633 compute units versus 0.000315 at 256 MB. The 1024 MB case used 0.001383 compute units and finished in 7.36 seconds. Keep the existing single-video allocation, the previously measured batch and profile allocations, and the precompiled official base. This selection saves compute while preserving the measured output quality.
+
+## Exact uninstrumented verification
+
+The trusted public workflow built and measured private build `0.1.23` from the selected runtime. The actor stayed private and the existing default resolved to `0.1.9`. The five exact cases passed source identity, caption coverage, ordered timestamps, expected memory, and the free music contract. There were no stage or model instrumentation records on these runs. [Exact native verification](https://github.com/aimansour/reelsaid/actions/runs/42561458692)
+
+| Workload | First usable text | Total | Compute units | Outcome |
+| --- | ---: | ---: | ---: | --- |
+| 60-second speech | 10.85 s | 11.44 s | 0.000664 | All four caption anchors and expected end |
+| Wildlife | 9.59 s | 10.19 s | 0.000591 | Verified closing line, timed partial within the eligibility boundary |
+| Music | — | 5.66 s | 0.000265 | `MUSIC_ONLY`, confidence 0.951, zero words and zero events |
+| Panel | 4.93 s | 5.57 s | 0.000275 | All four anchors and chronological segment starts |
+| Recent two-Reel batch | 4.43 s | 6.39 s | 0.000642 | Two qualified transcripts |
+
+The batch outperformed the quality-equivalent Steadyfetch observation of 6.72 seconds first and 9.27 seconds total. The native single cases trailed Steadyfetch's matched 6.51/8.80-second extended and 5.30/6.64-second wildlife observations. Earlier low-startup runs beat the extended target. The exact results establish a batch lead on the tested workload and a remaining single-Reel speed gap for launch measurement.
+
+The build initially succeeded while the CLI log stream stayed open until the workflow failed. The deployment script now polls the exact build and verifies its tag. A second failure exposed an oversized metadata response being passed as one shell argument. The receipt now carries only the confirmed status and numeric build version, and a regression covers a large metadata response. The final workflow passed with the exact runtime and kept the public log boundary intact.

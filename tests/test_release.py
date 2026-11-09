@@ -16,12 +16,21 @@ def test_deployment_stages_only_actor_files_and_approved_readme(tmp_path):
     commands.mkdir()
     capture = tmp_path / "capture"
     cli = commands / "apify"
-    cli.write_text(
-        '#!/usr/bin/env bash\nset -eu\n'
-        'while [[ "$1" != --dir ]]; do shift; done\n'
-        'cp -R -- "$2" "$CAPTURE"\n'
-        'printf "%s\\n" "$@" > "$CAPTURE/arguments.txt"\n'
-    )
+    cli.write_text("""#!/usr/bin/env bash
+set -eu
+case "$1 $2 $3" in
+    'actors push --dir')
+        shift 2
+        cp -R -- "$2" "$CAPTURE"
+        printf '%s\\n' "$@" > "$CAPTURE/arguments.txt"
+        printf '%s\\n' '{"build":{"id":"build","status":"READY"}}' ;;
+    'api GET actor-builds/build')
+        printf '%s\\n' '{"data":{"id":"build","actId":"actor","status":"SUCCEEDED","buildNumber":"0.1.2"}}' ;;
+    'api GET acts/actor')
+        printf '%s\\n' '{"data":{"taggedBuilds":{"candidate":{"buildId":"build"}}}}' ;;
+    *) exit 99 ;;
+esac
+""")
     cli.chmod(0o700)
     env = {**os.environ, "PATH": f"{commands}:{os.environ['PATH']}", "CAPTURE": str(capture)}
     subprocess.run(["bash", "scripts/deploy-actor.sh", str(package), "candidate"], env=env, check=True)
@@ -34,6 +43,7 @@ def test_deployment_stages_only_actor_files_and_approved_readme(tmp_path):
     assert not (capture / "other.txt").exists()
     arguments = (capture / "arguments.txt").read_text().splitlines()
     assert arguments[arguments.index("--build-tag") + 1] == "candidate"
+    assert arguments[arguments.index("--wait-for-finish") + 1] == "0"
     assert "--no-apply-env-vars-to-build" in arguments
     actor = json.loads((capture / ".actor/actor.json").read_text())
     assert actor["name"] == "reelsaid"

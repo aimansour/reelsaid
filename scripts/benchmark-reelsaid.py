@@ -13,7 +13,8 @@ actor = "aimansour~reelsaid"
 campaign = "allocation"
 
 
-def native_baseline(build, *, timings=False, compare_policies=False, startup_check=False, verify_native=False):
+def native_baseline(build, *, timings=False, compare_policies=False, startup_check=False, lean_media_check=False,
+                    verify_native=False):
     store = request("GET", f"key-value-stores/{store_name}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
@@ -26,6 +27,10 @@ def native_baseline(build, *, timings=False, compare_policies=False, startup_che
         "batch": ["field-report-captioned", "interview-captioned"],
     }
     experiments = [(name, references, "conditional", None, "") for name, references in cases.items()]
+    if lean_media_check:
+        experiments.extend(
+            (name, cases[name], "conditional", None, "-repeat") for name in ("extended", "wildlife", "batch")
+        )
     if startup_check:
         experiments = [(name, cases[name], "conditional", None, "") for name in ("batch", "music")]
         experiments.extend(
@@ -116,9 +121,11 @@ if __name__ == "__main__":
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--compare-policies", action="store_true")
     mode.add_argument("--startup-check", action="store_true")
+    mode.add_argument("--lean-media-check", action="store_true")
     args = parser.parse_args()
     if args.native_baseline:
         native_baseline(args.native_baseline, timings=args.require_timings, compare_policies=args.compare_policies,
-                        startup_check=args.startup_check, verify_native=args.verify_native)
+                        startup_check=args.startup_check, lean_media_check=args.lean_media_check,
+                        verify_native=args.verify_native)
     else:
         main()
