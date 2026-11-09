@@ -1,4 +1,8 @@
 {
+  "standby-cache": [
+    {"id":"steady-native-after-standby","actor":"steadyfetch~instagram-reel-transcript-scraper","surface":"native","case":"standby-cache-parity","cacheCondition":"unknown","requestedVideoIds":["DdcxNFkvybJ"],"capUsd":0.15,"input":{"reelUrls":["https://www.instagram.com/reel/DdcxNFkvybJ/"],"maxItems":1}},
+    {"id":"steady-standby-after-native","actor":"steadyfetch~instagram-reel-transcript-scraper","surface":"standby","endpoint":"https://steadyfetch--instagram-reel-transcript-scraper.apify.actor/","case":"standby-cache-parity","cacheCondition":"unknown","requestedVideoIds":["Ddi3q68I1BQ"],"input":{"reelUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"maxItems":1}}
+  ],
   "native-repeat": [
     {"id":"native-repeat-wolves-a","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/DehZj9wggt0/"],"forceRefresh":true},"surface":"native","case":"single-wolves","cacheCondition":"fresh","requestedVideoIds":["DehZj9wggt0"],"capUsd":0.15},
     {"id":"native-repeat-extended-a","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"forceRefresh":true},"surface":"native","case":"single-extended","cacheCondition":"fresh","requestedVideoIds":["Ddi3q68I1BQ"],"capUsd":0.15},
