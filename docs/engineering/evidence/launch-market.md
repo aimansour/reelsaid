@@ -32,7 +32,7 @@ Run empty, absent-body, misspelled, malformed-URL, and mixed controls with suppo
 
 The comparison suite rejected a cached response, an unknown cache state, and two equally shortened workloads. The trusted public dispatch validated the harness and log boundary before live runs. [Comparison harness verification](https://github.com/aimansour/reelsaid/actions/runs/42511169054)
 
-## Live observations in progress
+## Live comparisons
 
 The first fresh-attempt comparison on the 60-second captioned Reel delivered the following observations. The same observer measured first usable dataset output and terminal run completion. The ReelSaid and Steadyfetch texts had zero normalized word disagreement and passed all four independent caption anchors. The timing interval on ReelSaid was 0.02 to 60.37 seconds and on Steadyfetch it was 0 to 60.26 seconds. Identical words establish output agreement for this case. They leave processing order unknown. The ReelSaid requests used the deployed default build `0.1.9`. The reviewed private release candidate `0.1.12` has separate evidence and remains unpublished. The speed runs used each Actor's native memory default, including 256 MB for ReelSaid and 2048 MB for Steadyfetch on this single request.
 
@@ -57,6 +57,18 @@ The direct-audio controls separate the model input from Instagram retrieval. The
 
 The mixed English, Spanish, and music batch gave ReelSaid two qualified transcripts at 13.35 s first and 17.70 s total. The Spanish transcript arrived first. Steadyfetch returned three transcripts, including music, at 4.41 s first and 6.24 s total with zero transcript events across three previously observed sources. Panix returned two transcripts and a no-speech result at 12.88 s first and 14.62 s total with uncertain cache history. TubeText returned two transcripts and a lyrics result at 14.41 s first and 16.01 s total with explicit refresh. The unverified ReelSaid music row fails the expected no-speech verdict. APIMint and SIÁN timed out, and Memo23 reported three deadlines. These runs establish behavior and observed latencies. Use independently captioned, previously unseen speech sources in the fresh batch comparison for a comparable speed target. [Mixed-batch observations](https://github.com/aimansour/reelsaid/actions/runs/42512351035)
 
+The two-source follow-up included a 65-second report and a 58-second discussion. ReelSaid reached first text in 6.81 s and finished in 7.80 s. Both transcripts matched all independent caption anchors. The discussion returned a segment starting at 40.30 s after a segment starting at 40.54 s. This timing regression rules the candidate out of that speed comparison. Steadyfetch passed the output checks at 5.40 s first and 9.41 s total. Its row receipt explicitly identified one previously delivered transcript. The observer now recognizes that receipt as mixed-cache. Among fresh peers delivering the full timed workload, Lance API led at 7.89 s first and 15.67 s total, ahead of APISmith and TubeText. [Captioned-batch follow-up](https://github.com/aimansour/reelsaid/actions/runs/42556757624)
+
+The final fresh batch used an independently captioned 50-second report and 93-second interview. Steadyfetch charged two transcript events, one for each requested source. On the report, all three qualified products returned identical normalized words. On the interview, the strict anchor checker found Steadyfetch's one-word omission inside a caption excerpt. Manual review accepted that excerpt under the previously fixed one-edit rule. The opening, ending, and timings passed. Full-text disagreement with ReelSaid was 3.5% for Steadyfetch and 0.8% for Lance API, with no contiguous edit longer than two words in either comparison. APISmith appended unrelated words after the verified closing line. Panix exceeded the measured media duration. [Fresh two-Reel comparison](https://github.com/aimansour/reelsaid/actions/runs/42557034225)
+
+| Qualified product | First usable text | Total | Settled customer transcript events |
+| --- | ---: | ---: | --- |
+| ReelSaid | 6.56 s | 7.25 s | Owner candidate without active pricing |
+| Steadyfetch | 6.72 s | 9.27 s | 2 ($0.030) |
+| Lance API | 7.90 s | 17.25 s | 3 billed minutes ($0.015) |
+
+The 0.16-second difference to Steadyfetch on first delivery falls inside the observer's 0.35-second polling interval, which also excludes API round trips. Treat first delivery as tied on this run. ReelSaid completed this batch 2.02 seconds earlier. Treat this as one workload observation.
+
 ## Native input behavior
 
 ReelSaid returned one `NO_SOURCE` row for an empty object or absent body and one `UNKNOWN_INPUT` row for a misspelled field. All three yielded zero transcripts and an explicit uncharged result. The owner candidate has no live price. The SDK counters for this Actor are unavailable in the benchmark, so the evidence for these cases is the uncharged rows and the runner contract.
@@ -73,3 +85,11 @@ Steadyfetch attempted its default public creator in both the empty and absent-bo
 | Tracefetch | `INVALID_URL` | One Actor-start event | One Actor-start event on a previously observed source |
 
 Every mixed request returned the intended 25-word English transcript with zero normalized word edits against the short reference. The malformed-only requests all yielded zero text. The result supports ReelSaid's per-input error, preserving valid neighbors in a mixed batch, and distinguishing a malformed URL from an unavailable Instagram source. [Malformed and mixed input controls](https://github.com/aimansour/reelsaid/actions/runs/42513326324)
+
+## Targets for the next comparison
+
+Steadyfetch is the fastest qualified native rival observed for both timing metrics on the fresh 60-second single Reel and the recent two-Reel batch. The second single Reel reinforces its lead and exposes a ReelSaid tail error to fix before treating the outputs as equivalent. Keep Lance API as a quality-qualified batch check and Panix as a peer on single-Reel coverage. Use Steadyfetch's 5.32-second direct response as the initial Standby reference. Confirm its speed on a matched, caption-graded workload when ReelSaid has a live Standby route.
+
+Use the released default and exact private candidate as separate baselines. Reproduce the unverified music result, unsupported tail words, and out-of-order segment timestamps on the exact candidate. Use the known speech and no-speech pairs to compare audio-policy choices and preserve legitimate mixed audio. Keep explicit source validation and a free no-speech result. Rerun the native performance comparison with matched outputs after the quality corrections.
+
+The campaign stored 78 observations in restricted storage. Known settled native event charges total $0.731. Standby receipts and compute usage are separate. Public verification logs carry the outcome of the check.
