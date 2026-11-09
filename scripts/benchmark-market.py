@@ -245,7 +245,7 @@ def launch(group):
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
     native_build = None
-    if group == "native-fresh":
+    if group in {"native-fresh", "native-repeat"}:
         actor = request("GET", "acts/aimansour~reelsaid")["data"]
         if actor["isPublic"]:
             raise RuntimeError("Fresh candidate measurements require a private build.")

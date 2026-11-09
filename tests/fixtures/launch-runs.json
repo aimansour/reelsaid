@@ -1,4 +1,12 @@
 {
+  "native-repeat": [
+    {"id":"native-repeat-wolves-a","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/DehZj9wggt0/"],"forceRefresh":true},"surface":"native","case":"single-wolves","cacheCondition":"fresh","requestedVideoIds":["DehZj9wggt0"],"capUsd":0.15},
+    {"id":"native-repeat-extended-a","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"forceRefresh":true},"surface":"native","case":"single-extended","cacheCondition":"fresh","requestedVideoIds":["Ddi3q68I1BQ"],"capUsd":0.15},
+    {"id":"native-repeat-wolves-b","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/DehZj9wggt0/"],"forceRefresh":true},"surface":"native","case":"single-wolves","cacheCondition":"fresh","requestedVideoIds":["DehZj9wggt0"],"capUsd":0.15},
+    {"id":"native-repeat-extended-b","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"forceRefresh":true},"surface":"native","case":"single-extended","cacheCondition":"fresh","requestedVideoIds":["Ddi3q68I1BQ"],"capUsd":0.15},
+    {"id":"native-repeat-wolves-c","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/DehZj9wggt0/"],"forceRefresh":true},"surface":"native","case":"single-wolves","cacheCondition":"fresh","requestedVideoIds":["DehZj9wggt0"],"capUsd":0.15},
+    {"id":"native-repeat-extended-c","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"forceRefresh":true},"surface":"native","case":"single-extended","cacheCondition":"fresh","requestedVideoIds":["Ddi3q68I1BQ"],"capUsd":0.15}
+  ],
   "native-fresh": [
     {"id":"fresh-pyramid-reelsaid","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/DfdAEEIA6oP/"],"forceRefresh":true},"surface":"native","case":"fresh-pyramid","cacheCondition":"fresh","requestedVideoIds":["DfdAEEIA6oP"],"capUsd":0.15},
     {"id":"fresh-pyramid-steady","actor":"steadyfetch~instagram-reel-transcript-scraper","input":{"reelUrls":["https://www.instagram.com/reel/DfdAEEIA6oP/"],"maxItems":1},"surface":"native","case":"fresh-pyramid","cacheCondition":"fresh","requestedVideoIds":["DfdAEEIA6oP"],"capUsd":0.15},

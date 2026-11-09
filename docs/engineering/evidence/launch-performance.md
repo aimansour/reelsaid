@@ -112,4 +112,23 @@ The CPU-only dependency experiment targets the runtime layer added above the Api
 
 The `0.1.27` experiment passed the same eight hosted quality checks. Image pulls for the two matched cold speech clips dropped from 3.52 to 2.87 seconds and from 3.76 to 3.00 seconds. Cold first/total changed from 9.73/10.48 to 8.68/9.36 on the extended clip and from 10.14/10.87 to 8.82/9.52 on wildlife. The warm runs delivered extended in 5.48/6.18 and wildlife in 6.90/7.58 seconds. Both warm batches led the Steadyfetch batch with 5.40/6.82 and 5.72/6.40 seconds. Music remained free at 0.951 classification confidence. That run had a 2.89-second image pull, so its total cannot be compared directly to the warm music baseline.
 
-The pinned HTTP wheel contains removable native symbols. Stripping them saved 11.81 MB in a local gzip comparison. The stripped wheel imported successfully and passed the full local suite with the existing 13 skips. The selected dependency stage now strips it and omits the validated CPU-only payloads before copying the environment into the runtime. Build tools stay in the disposable stage. The next exact hosted run includes two fresh pyramid observations so the quality-qualified holdout can be evaluated on a worker with the same image cache condition as the Steadyfetch observation.
+The pinned HTTP wheel contains removable native symbols. Stripping them saved 11.81 MB in a local gzip comparison. The stripped wheel imported successfully and passed the full local suite with the existing 13 skips. The selected dependency stage now strips it and omits the validated CPU-only payloads before copying the environment into the runtime. Build tools stay in the disposable stage. The exact optimized build `0.1.28` passed all ten hosted checks. [Exact CPU runtime verification](https://github.com/aimansour/reelsaid/actions/runs/42592043759)
+
+| Workload | Image pull | First usable text | Total | Apify usage |
+| --- | ---: | ---: | ---: | ---: |
+| 60-second speech | 2.403 s | 7.16 s | 7.75 s | $0.000586 |
+| 60-second speech, fresh repeat | 0.002 s | 5.00 s | 5.61 s | $0.000553 |
+| Wildlife | 4.412 s | 9.44 s | 10.05 s | $0.000619 |
+| Wildlife, fresh repeat | 0.003 s | 5.72 s | 6.34 s | $0.000565 |
+| Music | 2.427 s | — | 8.80 s | $0.000502 |
+| Panel | 2.476 s | 7.43 s | 8.06 s | $0.000587 |
+| Two-Reel batch | 0.002 s | 5.57 s | 6.22 s | $0.000925 |
+| Two-Reel batch, fresh repeat | 0.003 s | 4.51 s | 5.83 s | $0.000909 |
+| Pyramid | 0.002 s | 4.92 s | 5.52 s | $0.000556 |
+| Pyramid, fresh repeat | 0.003 s | 5.63 s | 6.32 s | $0.000566 |
+
+Both pyramid repeats used fresh transcription on warm image workers. They matched the independently reviewed anchors and ending, and both completed ahead of Steadyfetch's warm 5.86/7.57-second run. The first result led by 0.94 seconds on the faster repeat and by 0.23 seconds on the other, within polling resolution for the latter. The warm extended case and both warm batches also led on first result and completion. The warm wildlife result remained 0.42 seconds behind on first text and completed 0.30 seconds sooner. The cold wildlife run still took 4.41 seconds to pull the image. No cold-worker Steadyfetch reference was observed, so the native cold-user speed gap remains open.
+
+Four comparable instrumented cases at 256 MB put median wildlife discovery at 1.218 seconds, with a 2.283-second maximum. The guest setup accounted for up to 1.807 seconds. The median ASR stage was 0.705 seconds and independent classification 0.302 seconds. The measured retrieval tail warrants checking whether the first post request can safely omit a separate guest setup. The comparison uses new sessions and exact video and Carousel child matching.
+
+The cloud probe compared fresh sessions in alternating order for the extended, wildlife, pyramid, and Carousel fixtures. Every stateless response returned HTTP 200 in 0.149–0.175 seconds, with roughly 512 KB of response data and zero matching videos. The current guest setup returned all six expected video identities across the four fixtures in 0.606–0.936 seconds. The Carousel returned all three children. The current path remains selected. An unsuccessful stateless request would add a round trip and over 500 KB before the same fallback. [Cloud retrieval verification](https://github.com/aimansour/reelsaid/actions/runs/42592966708)
