@@ -13,7 +13,7 @@ actor = "aimansour~reelsaid"
 campaign = "allocation"
 
 
-def native_baseline(build, *, timings=False, compare_policies=False, startup_check=False):
+def native_baseline(build, *, timings=False, compare_policies=False, startup_check=False, verify_native=False):
     store = request("GET", f"key-value-stores/{store_name}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
@@ -56,6 +56,28 @@ def native_baseline(build, *, timings=False, compare_policies=False, startup_che
         observation = market["read_record"](record)
         if observation.get("status") != "SUCCEEDED" or (timings and not observation.get("timings")):
             raise RuntimeError(f"Baseline observation failed: {label}")
+        if verify_native:
+            verify_native_case(observation, [fixtures[reference] for reference in references])
+
+
+def verify_native_case(observation, references):
+    memory = 256 if len(references) == 1 else 512
+    if observation["memoryMbytes"] != memory:
+        raise RuntimeError("Native allocation did not match the selected memory.")
+    rows = observation["rows"]
+    if len(rows) != len(references):
+        raise RuntimeError("Native verification did not deliver the selected workload.")
+    grade = run_path(str(Path(__file__).with_name("summarize-performance.py")))["caption_grade"]
+    for reference in references:
+        identity = reference["url"].strip("/").split("/")[-1]
+        row = next((row for row in rows if market["completed_ids"]([row]) == [identity]), None)
+        if row is None:
+            raise RuntimeError("Native verification did not deliver a selected identity.")
+        if "captionAnchors" in reference:
+            if not market["usable"](row) or not grade(row, reference)["equivalent"]:
+                raise RuntimeError("Native verification missed reference speech or timings.")
+        elif row["errorCode"] != "MUSIC_ONLY" or row["transcript"] or row["charged"] or row["chargedEvents"]:
+            raise RuntimeError("Native verification did not return a free music result.")
 
 
 def main():
@@ -90,12 +112,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--native-baseline", metavar="BUILD")
     parser.add_argument("--require-timings", action="store_true")
+    parser.add_argument("--verify-native", action="store_true")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--compare-policies", action="store_true")
     mode.add_argument("--startup-check", action="store_true")
     args = parser.parse_args()
     if args.native_baseline:
         native_baseline(args.native_baseline, timings=args.require_timings, compare_policies=args.compare_policies,
-                        startup_check=args.startup_check)
+                        startup_check=args.startup_check, verify_native=args.verify_native)
     else:
         main()

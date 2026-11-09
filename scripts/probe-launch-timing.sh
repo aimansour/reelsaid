@@ -43,12 +43,10 @@ def edit(file, changes):
 
 root = Path(sys.argv[1])
 if sys.argv[3] == "cached-base":
-    edit(root.parents[1] / "Dockerfile", {
-        "FROM python:3.12-slim-bookworm": (
-            "FROM apify/actor-python:3.12@sha256:"
-            "5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a"
-        ),
-    })
+    dockerfile = root.parents[1] / "Dockerfile"
+    base = "FROM apify/actor-python:3.12@sha256:5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a"
+    if not dockerfile.read_text().startswith(base + "\n"):
+        edit(dockerfile, {"FROM python:3.12-slim-bookworm": base})
 edit(root / "__main__.py", {
     "import asyncio": "from . import _launch_timing as timing\n\nimport asyncio",
     '        env = Actor.get_env()': (
@@ -106,5 +104,7 @@ build=$(apify api GET "actor-builds/$build_id" --user-agent "$user_agent" |
 options=(--native-baseline "$build")
 if [[ -n $check ]]; then
     options+=(--require-timings "$check")
+else
+    options+=(--verify-native)
 fi
 python3 scripts/benchmark-reelsaid.py "${options[@]}"
