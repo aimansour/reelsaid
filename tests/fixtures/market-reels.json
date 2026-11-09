@@ -17,6 +17,8 @@
       "url": "https://www.instagram.com/reel/Ddi3q68I1BQ/",
       "durationSeconds": 60.369,
       "expected": "speech",
+      "firstSpeechBy": 1,
+      "lastSpeechAtLeast": 59,
       "captionAnchors": ["Number one is to have a", "bestsellers and you're", "tips for the day", "Good luck"]
     },
     "spanish-field": {
@@ -25,10 +27,34 @@
       "language": "es",
       "reference": "Spoken-language field case. Editorial overlays are separate from the spoken reference."
     },
+    "wolves-captioned": {
+      "url": "https://www.instagram.com/reel/DehZj9wggt0/",
+      "durationSeconds": 30.142708,
+      "expected": "speech",
+      "firstSpeechBy": 1.5,
+      "lastSpeechAtLeast": 24,
+      "captionAnchors": ["Hudson Bay", "Moose are dangerous prey", "If we want to film the pack", "What did you do at work today"]
+    },
     "music-field": {
       "url": "https://www.instagram.com/reel/DdO99ZaxLrt/",
       "durationSeconds": 34.6,
       "reference": "APIMint publishes this as its no-speech example. Inspect the audio and report live verdicts separately."
+    },
+    "reporter-captioned": {
+      "url": "https://www.instagram.com/reel/DcvbKxGlSm7/",
+      "durationSeconds": 65.130567,
+      "expected": "speech",
+      "firstSpeechBy": 1,
+      "lastSpeechAtLeast": 63,
+      "captionAnchors": ["If you shop at Shein", "fast fashion giant", "out of options in the", "alternative to go public"]
+    },
+    "panel-captioned": {
+      "url": "https://www.instagram.com/reel/DffMmopAacr/",
+      "durationSeconds": 57.513375,
+      "expected": "speech",
+      "firstSpeechBy": 1,
+      "lastSpeechAtLeast": 55,
+      "captionAnchors": ["How did you sense", "does understand the plumbing", "proponents of Brexit", "nothing to do with him"]
     },
     "multilingual-reference": {
       "dataset": "google/fleurs",

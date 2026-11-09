@@ -22,7 +22,10 @@ ACTORS = {
 }
 TERMINAL = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"}
 USER_AGENT = "apify-agent-skills/apify-actor-development"
-NO_RESULT = {"error", "failed", "private_or_removed", "skipped", "deferred", "no_speech", "no-speech", "no_audio"}
+NO_RESULT = {
+    "error", "failed", "private_or_removed", "skipped", "deferred", "no_speech", "no-speech", "no_audio",
+    "lyrics", "input_note", "run_summary", "deadline",
+}
 
 
 def request(method, path, body=None, **params):
@@ -46,10 +49,18 @@ def read_record(path):
 
 
 def usable(row):
-    if (not isinstance(row, dict) or str(row.get("status") or "").lower() in NO_RESULT
-            or row.get("errMsg") or row.get("error")):
+    if not isinstance(row, dict):
         return False
-    for key in ("text", "transcript", "fullText", "fullTranscript", "transcription"):
+    status = str(row.get("status") or "").lower()
+    if (status in NO_RESULT or row.get("errMsg") or row.get("error")
+            or row.get("noSpeech") is True or row.get("hasSpeech") is False):
+        return False
+    if status == "partial":
+        quality = row.get("quality")
+        fraction = quality.get("affectedFraction") if isinstance(quality, dict) else None
+        if not isinstance(fraction, (int, float)) or not 0 <= fraction <= 0.20:
+            return False
+    for key in ("text", "transcript", "fullText", "fullTranscript", "transcription", "spokenTranscript"):
         val = row.get(key)
         if isinstance(val, str) and val.strip():
             return True
@@ -66,7 +77,8 @@ def completed_ids(rows):
         metadata = row.get("metadata")
         if not isinstance(metadata, dict):
             metadata = {}
-        post_url = metadata.get("postUrl") or row.get("postUrl") or row.get("reelUrl") or row.get("url") or ""
+        post_url = (metadata.get("postUrl") or row.get("postUrl") or row.get("reelUrl")
+                    or row.get("normalizedUrl") or row.get("instagramUrl") or row.get("inputUrl") or row.get("url") or "")
         match = re.search(r"/(?:reels?|p|tv)/([A-Za-z0-9_-]+)", urlsplit(post_url).path) if isinstance(post_url, str) else None
         identity = metadata.get("shortcode") or row.get("shortCode") or row.get("shortcode")
         identity = identity or (match[1] if match else row.get("videoId"))

@@ -89,6 +89,47 @@ def summarize_case(case):
     }
 
 
+def caption_grade(row, fixture):
+    def normalize(value):
+        words = " ".join(re.findall(r"[^\W_]+", value.casefold().replace("’", "").replace("'", "")))
+        return re.sub(r"\bbest sellers\b", "bestsellers", words)
+
+    candidate = row.get("transcript")
+    content = candidate if isinstance(candidate, dict) else row
+    transcript = next((content[key] for key in ("transcript", "text", "fullText", "fullTranscript", "transcription",
+                                               "spokenTranscript")
+                       if isinstance(content.get(key), str) and content[key].strip()), "")
+    normalized = normalize(transcript)
+    offset = 0
+    seen = []
+    for anchor in fixture["captionAnchors"]:
+        value = normalize(anchor)
+        found = normalized.find(value, offset)
+        if found != -1:
+            seen.append(anchor)
+            offset = found + len(value)
+
+    bounds = []
+    for segment in content.get("segments") or []:
+        if isinstance(segment, dict):
+            start = segment.get("startSeconds", segment.get("start"))
+            end = segment.get("endSeconds", segment.get("end"))
+            if end is None and isinstance(start, (int, float)) and isinstance(segment.get("duration"), (int, float)):
+                end = start + segment["duration"]
+            if isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                bounds.append((start, end))
+    timing = bool(bounds) and all(
+        0 <= start < end <= fixture["durationSeconds"] + 0.5 for start, end in bounds
+    ) and all(left[0] <= right[0] for left, right in zip(bounds, bounds[1:]))
+    first = bounds[0][0] if bounds else None
+    last = max(end for _, end in bounds) if bounds else None
+    equivalent = (
+        len(seen) == len(fixture["captionAnchors"]) and normalized.endswith(normalize(fixture["captionAnchors"][-1]))
+        and timing and first <= fixture["firstSpeechBy"] and last >= fixture["lastSpeechAtLeast"]
+    )
+    return {"equivalent": equivalent, "anchorsMatched": len(seen), "timedStart": first, "timedEnd": last}
+
+
 def matched_timing(left, right):
     if any(left.get(key) != right.get(key) for key in ("surface", "case", "cacheCondition")):
         return False

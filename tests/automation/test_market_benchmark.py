@@ -22,6 +22,19 @@ class MarketBenchmarkTest(unittest.TestCase):
         self.assertFalse(usable({"errMsg": "Private", "text": "Content unavailable"}))
         self.assertTrue(usable({"status": "success", "transcript": "Actual speech."}))
 
+    def test_provider_specific_fields_keep_the_same_video_identity(self):
+        row = {"status": "success", "normalizedUrl": "https://www.instagram.com/reel/Ddi3q68I1BQ/",
+               "transcript": {"text": "Actual speech."}}
+        self.assertTrue(usable(row))
+        self.assertEqual(benchmark["completed_ids"]([row]), ["Ddi3q68I1BQ"])
+        self.assertTrue(usable({"spokenTranscript": "Actual speech."}))
+
+    def test_unverified_partial_is_not_first_usable_text(self):
+        row = {"status": "partial", "transcript": "Possible speech."}
+        self.assertFalse(usable({**row, "quality": {"affectedFraction": None}}))
+        self.assertFalse(usable({**row, "quality": {"affectedFraction": 0.21}}))
+        self.assertTrue(usable({**row, "quality": {"affectedFraction": 0.20}}))
+
     def test_fresh_comparison_rejects_cached_result(self):
         matches = summary["matched_timing"]
         self.assertTrue(matches(observed(), observed()))
@@ -35,6 +48,16 @@ class MarketBenchmarkTest(unittest.TestCase):
         self.assertFalse(matches(observed(), observed(completedVideoIds=["a", "a"])))
         self.assertFalse(matches(observed(), observed(quality={"equivalent": False})))
         self.assertFalse(matches(observed(completedVideoIds=["a"]), observed(completedVideoIds=["a"])))
+
+    def test_caption_coverage_distinguishes_truncated_transcript(self):
+        grade = summary["caption_grade"]
+        row = {"transcript": "Here are the best sellers. Good luck.",
+               "segments": [{"start": 0.1, "end": 9.8}]}
+        fixture = {"captionAnchors": ["here are", "bestsellers", "good luck"],
+                   "durationSeconds": 10, "firstSpeechBy": 1, "lastSpeechAtLeast": 9}
+        self.assertTrue(grade(row, fixture)["equivalent"])
+        self.assertFalse(grade({**row, "transcript": "Here are the best sellers."}, fixture)["equivalent"])
+        self.assertFalse(grade({**row, "segments": [{"start": 0.1, "end": 7.8}]}, fixture)["equivalent"])
 
 
 if __name__ == "__main__":
