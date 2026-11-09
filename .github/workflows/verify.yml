@@ -17,7 +17,7 @@ on:
         required: false
         type: choice
         default: contract
-        options: [contract, single, batch, audio, input-a, input-b, standby, standby-probe, timing, startup, cached-base, lean-media, timestamps, native, native-fresh, native-repeat, retrieval-timing]
+        options: [contract, single, batch, audio, input-a, input-b, standby, standby-probe, standby-multi, timing, startup, cached-base, lean-media, timestamps, native, native-fresh, native-repeat, retrieval-timing]
 
 permissions:
   contents: read
