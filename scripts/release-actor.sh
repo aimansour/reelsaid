@@ -81,7 +81,10 @@ reject_empty() {
 }
 
 release_store() {
-    apify api POST key-value-stores -p '{"name":"reelsaid-release-private"}' -d '{}' | jq -er .data.id
+    local id
+    id=$(apify api POST key-value-stores -p '{"name":"reelsaid-release-private"}' -d '{}' | jq -er .data.id)
+    apify api PUT "key-value-stores/$id" -d '{"generalAccess":"RESTRICTED"}' |
+        jq -er --arg id "$id" '.data | select(.id == $id and .generalAccess == "RESTRICTED") | .id'
 }
 
 get_actor

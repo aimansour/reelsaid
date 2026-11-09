@@ -104,7 +104,12 @@ match args[:3]:
         result = {"data": actor}
     case ["api", "POST", "key-value-stores"]:
         result = {"data": {"id": "fixture"}}
+    case ["api", "PUT", "key-value-stores/fixture"]:
+        assert json.loads(args[4]) == {"generalAccess": "RESTRICTED"}
+        state.with_suffix(".store-access").write_text("RESTRICTED")
+        result = {"data": {"id": "fixture", "generalAccess": "RESTRICTED"}}
     case ["api", "GET", "key-value-stores/fixture/records/CANDIDATE"]:
+        assert state.with_suffix(".store-access").read_text() == "RESTRICTED"
         result = {"source": os.environ["FIXTURE_SOURCE"], "package": os.environ["FIXTURE_PACKAGE"], "buildId": "build"}
     case ["api", "GET", "actor-builds/build"]:
         result = {"data": {"id": "build", "actId": "actor", "status": "SUCCEEDED", "buildNumber": "0.1.2",
