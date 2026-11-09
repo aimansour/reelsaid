@@ -10,7 +10,7 @@ import pytest
 def test_deployment_stages_only_actor_files_and_approved_readme(tmp_path):
     package = tmp_path / "public"
     package.mkdir()
-    (package / "README.md").write_text("# Approved Store README\n")
+    (package / "README.md").write_text("# Approved GitHub title\n\n## Try it\n\nUse an explicit Reel link.\n")
     (package / "other.txt").write_text("Never part of the Actor source upload")
     commands = tmp_path / "bin"
     commands.mkdir()
@@ -34,7 +34,7 @@ esac
     cli.chmod(0o700)
     env = {**os.environ, "PATH": f"{commands}:{os.environ['PATH']}", "CAPTURE": str(capture)}
     subprocess.run(["bash", "scripts/deploy-actor.sh", str(package), "candidate"], env=env, check=True)
-    assert (capture / ".actor/README.md").read_bytes() == (package / "README.md").read_bytes()
+    assert (capture / ".actor/README.md").read_text() == "## Try it\n\nUse an explicit Reel link.\n"
     assert (capture / ".actor/input_schema.json").is_file()
     assert (capture / "Dockerfile").is_file() and (capture / "uv.lock").is_file()
     assert (capture / "src/reelsaid/__main__.py").is_file()
