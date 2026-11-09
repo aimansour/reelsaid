@@ -24,6 +24,7 @@ def create_app(environment):
     runtime_user = environment["user_id"]
     run_id = environment["run_id"]
     context = sha256(runtime_user.encode()).hexdigest()[:16] if runtime_user else None
+    platform_budget = environment["max_total_charge_usd"]
     client = Actor.apify_client if at_home else None
     run = client.run(run_id) if client else None
 
@@ -51,7 +52,7 @@ def create_app(environment):
             "readinessSeen": ready,
             "runId": run_id,
             "callerContext": context,
-            "platformBudget": environment["max_total_charge_usd"],
+            "platformBudget": str(platform_budget) if platform_budget is not None else None,
             "authorizationForwarded": "Authorization" in request.headers,
             "apifyAuthorizationForwarded": "X-Apify-Authorization" in request.headers,
             "apifyHeaders": sorted({key.lower() for key in request.headers

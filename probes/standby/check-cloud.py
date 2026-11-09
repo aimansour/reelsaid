@@ -85,6 +85,7 @@ def main():
         assert native["status"] == "SUCCEEDED"
         report.update(stage="gateway", nativeOrigin=native["meta"]["origin"])
         unauthenticated, _ = server_call(endpoint, "GET", "/", auth=None)
+        report["unauthenticatedStatus"] = unauthenticated
         assert unauthenticated in {401, 403}
         health, ready = server_call(endpoint, "GET", "/")
         assert health == 200 and ready == {"status": "ready"}
@@ -95,6 +96,7 @@ def main():
             return body
 
         first = call("observe")
+        report["first"] = first
         assert first["origin"] == "STANDBY" and first["readinessSeen"]
         assert first["callerContext"] and first["runId"] and first["port"] > 0
         assert not first["authorizationForwarded"]
@@ -102,6 +104,7 @@ def main():
                                       auth="X-Apify-Authorization", headers={
             "X-Actor-Request-ID": forged, "X-Actor-User-ID": forged, "X-Apify-User-ID": forged,
         })
+        report["forgedStatus"] = spoofed
         assert spoofed == 200
         assert replay["callerContext"] == first["callerContext"] and replay["runId"] == first["runId"]
         report.update(stage="storage", first=first, forged=replay)

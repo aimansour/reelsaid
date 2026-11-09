@@ -33,6 +33,7 @@ def main():
             "APIFY_META_ORIGIN": "STANDBY",
             "APIFY_LOCAL_STORAGE_DIR": storage,
             "APIFY_IS_AT_HOME": "0",
+            "ACTOR_MAX_TOTAL_CHARGE_USD": "0.015",
         }
         server = subprocess.Popen([sys.executable, "probe.py"], cwd=Path(__file__).parent, env=environment)
         try:
@@ -60,6 +61,7 @@ def main():
             observation = json.loads(body)
             assert status == 200 and observation["origin"] == "STANDBY"
             assert observation["port"] == port and observation["readinessSeen"]
+            assert observation["platformBudget"] == "0.015"
             status, body = request(opener, url, "/probe", data=b'{"mode":"charge","maxTotalChargeUsd":0}',
                                    headers=json_header)
             assert status == 200 and json.loads(body)["settlement"] == "budget-rejected"
