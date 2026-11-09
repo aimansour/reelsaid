@@ -1,17 +1,25 @@
 # ReelSaid — Instagram Reels Transcript API
 
-> Every Reel, in Words. Transcribe public Instagram Reels, video posts, carousels, profiles, and datasets into original-language text with Whisper Large-v3.
+> Every Reel, in Words. Turn public Instagram Reels and video posts into original-language transcripts, opening hooks, timestamped words, and SRT or WebVTT with Whisper Large-v3.
 
-Use ReelSaid when a task needs spoken words, timestamps, subtitles, or opening hooks from public Instagram video. The Actor ID is `aimansour/reelsaid`. Call it through Apify MCP or the Apify API and read the run dataset.
+Use ReelSaid for Instagram video-to-text, subtitle generation, creator research, and public account monitoring. The Apify Actor is `aimansour/reelsaid`.
+
+## Choose the right interface
+
+- Use Apify MCP or the native Apify run API for multiple links, public profiles, carousels, datasets, and continuation. For MCP, call `fetch-actor-details`, `call-actor` with an explicit source, then `get-dataset-items` with the returned dataset ID.
+- Use authenticated JSON `POST /` at `https://aimansour--reelsaid.apify.actor/` for one video. Read `rows[0]` and `summary`. Standby includes requested subtitles inline.
+- Pass `language: "auto"` for automatic language detection. Preserve the original spoken language. Set `wordLevelTimestamps: true` when a workflow needs individual words.
 
 ## Tool and examples
 
 - [Actor listing and quickstart](https://apify.com/aimansour/reelsaid)
 - [Input fields](https://apify.com/aimansour/reelsaid/input-schema)
+- [API recipes and response fields](https://github.com/aimansour/reelsaid/blob/main/examples/api/README.md)
+- [Standby request JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/standby.json)
 - [Single Reel JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/reel.json)
 - [Profile JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/profile.json)
 - [Dataset JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/dataset.json)
 - [Example output](https://github.com/aimansour/reelsaid/blob/main/examples/api/output.json)
 - [Apify MCP setup](https://docs.apify.com/agents/quickstart)
 
-Read `status` and `retryable` for each row. Use `transcript` for full text, `segments` for timed text, and `hook.text` for available speech in the opening three seconds. Read `SUMMARY` from the run's key-value store to find any continuation. Use the subtitle references to fetch SRT or WebVTT.
+Read `status`, `errorCode`, and `retryable` for each row. Use `transcript` for full text, `segments` for timed text, and `hook.text` for available speech in the opening three seconds. The post caption is `metadata.caption`. Native runs keep continuation in the `SUMMARY` record and return subtitle URLs. Native and Standby result history is separate. Reuse a result within the same interface or use `forceRefresh` for a fresh transcript.
