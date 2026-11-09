@@ -201,8 +201,16 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+def active_standby_runs(actor):
+    data = request("GET", f"acts/{actor}/runs", status="READY,RUNNING", limit=100)["data"]
+    return [
+        {"id": run["id"], "status": run["status"], "deployment": run.get("standbyDeployment")}
+        for run in data["items"] if (run.get("meta") or {}).get("origin") == "STANDBY"
+    ]
+
+
 def standby_benchmark(actor, endpoint, payload, record, *, case, cache_condition="unknown", timeout=75,
-                      requested_ids=()):
+                      requested_ids=(), observe_instances=False, build=None):
     url = urlsplit(endpoint)
     if url.scheme != "https" or not url.hostname or not url.hostname.endswith(".apify.actor") or url.username or url.password:
         raise ValueError("Standby benchmark requires an Apify hostname")
@@ -212,6 +220,10 @@ def standby_benchmark(actor, endpoint, payload, record, *, case, cache_condition
               "input": payload, "status": "SUBMITTING", "quality": None, "settledChargeUsd": None,
               "requestedVideoIds": requested_ids, "completedVideoIds": []}
     request("PUT", record, report)
+    if observe_instances:
+        report["activeStandbyBefore"] = active_standby_runs(actor)
+    if build is not None:
+        report["build"] = build
     headers = {"Authorization": f"Bearer {os.environ['APIFY_TOKEN']}", "Accept": "application/json"}
     if payload is not None:
         headers["Content-Type"] = "application/json"
@@ -233,7 +245,17 @@ def standby_benchmark(actor, endpoint, payload, record, *, case, cache_condition
     except (OSError, ValueError) as exc:
         report.update(status="OBSERVATION_FAILED", error=type(exc).__name__)
     report.setdefault("totalSeconds", round(monotonic() - start, 2))
+    if observe_instances:
+        report["activeStandbyAfter"] = active_standby_runs(actor)
     request("PUT", record, report)
+
+
+def release_candidate_build(actor):
+    build = (actor.get("taggedBuilds", {}).get("launch-standby") or {}).get("buildNumber")
+    standby = actor.get("actorStandby") or {}
+    if actor.get("isPublic") is not False or not build or not standby.get("isEnabled") or standby.get("build") != build:
+        raise RuntimeError("Release comparison requires the same exact private build on native and Standby.")
+    return build
 
 
 def launch(group):
@@ -245,20 +267,25 @@ def launch(group):
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
     native_build = None
+    compare_release = group == "release-comparison"
+    own_actor = "aimansour~reelsaid"
     if group in {"native-fresh", "native-repeat"}:
-        actor = request("GET", "acts/aimansour~reelsaid")["data"]
+        actor = request("GET", f"acts/{own_actor}")["data"]
         if actor["isPublic"]:
             raise RuntimeError("Fresh candidate measurements require a private build.")
         native_build = actor["taggedBuilds"]["launch-native"]["buildNumber"]
+    elif compare_release:
+        native_build = release_candidate_build(request("GET", f"acts/{own_actor}")["data"])
     for item in cases:
         record = f"key-value-stores/{store['id']}/records/launch-{item['id']}"
         options = {"case": item["case"], "cache_condition": item.get("cacheCondition", "unknown"),
                    "requested_ids": item.get("requestedVideoIds", [])}
+        if native_build and item["actor"] == own_actor:
+            options["build"] = native_build
         if item["surface"] == "standby":
-            standby_benchmark(item["actor"], item["endpoint"], item.get("input"), record, **options)
+            standby_benchmark(item["actor"], item["endpoint"], item.get("input"), record,
+                              observe_instances=compare_release, **options)
         else:
-            if native_build and item["actor"] == "aimansour~reelsaid":
-                options["build"] = native_build
             benchmark(item["actor"], item.get("input"), item["capUsd"], record, **options)
 
 

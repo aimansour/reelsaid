@@ -41,6 +41,16 @@ class MarketBenchmarkTest(unittest.TestCase):
         self.assertFalse(matches(observed(), observed(cacheCondition="cached-repeat")))
         self.assertFalse(matches(observed(), observed(cacheCondition="unknown")))
 
+    def test_release_comparison_pins_both_surfaces_to_the_private_candidate(self):
+        resolve = benchmark["release_candidate_build"]
+        actor = {"isPublic": False, "taggedBuilds": {"launch-standby": {"buildNumber": "0.1.30"}},
+                 "actorStandby": {"isEnabled": True, "build": "0.1.30"}}
+        self.assertEqual(resolve(actor), "0.1.30")
+        with self.assertRaises(RuntimeError):
+            resolve({**actor, "isPublic": True})
+        with self.assertRaises(RuntimeError):
+            resolve({**actor, "actorStandby": {"isEnabled": True, "build": "latest"}})
+
     def test_delivery_receipt_identifies_reused_transcript_without_cached_flag(self):
         cached = benchmark["is_cached_result"]
         self.assertTrue(cached({"cached": True}))
