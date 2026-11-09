@@ -18,6 +18,4 @@ path = Path(sys.argv[1])
 identities = {caller(os.environ[key]) for key in ("APIFY_TOKEN", "APIFY_STANDBY_TEST_TOKEN")}
 if len(identities) != 2:
     raise RuntimeError("Two distinct authorized Apify accounts are required.")
-definition = json.loads(path.read_text())
-definition["environmentVariables"] = {"REELSAID_STANDBY_QA_CALLERS": " ".join(sorted(identities))}
-path.write_text(json.dumps(definition, indent=2) + "\n")
+path.write_text(f"CALLER_HASHES = frozenset({tuple(sorted(identities))!r})\n")

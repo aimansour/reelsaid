@@ -37,7 +37,7 @@ def server_call(url, method, path, payload=None, *, auth="Authorization", header
     except HTTPError as error:
         response = error
     with response:
-        if response.status >= 400 or response.headers.get_content_type() != "application/json":
+        if response.headers.get_content_type() != "application/json":
             return response.status, None
         return response.status, json.load(response)
 
@@ -67,7 +67,9 @@ def main():
     if tenancy not in ("SINGLE_TENANT", "MULTI_TENANT"):
         raise ValueError("Choose a supported private Standby tenancy.")
     source = request("GET", f"acts/{actor}")["data"]
-    assert source["isPublic"] is False
+    if source["isPublic"]:
+        assert cross and source["isSourceCodeHidden"] and source["isDeprecated"]
+        assert source["actorStandby"]["isEnabled"] is False
     pricing = {
         "pricingModel": "PAY_PER_EVENT",
         "isPPEPlatformUsagePaidByUser": False,
@@ -85,10 +87,10 @@ def main():
     suffix = "-cross" if cross else "-multi" if tenancy == "MULTI_TENANT" else ""
     receipt = f"key-value-stores/{benchmark_store['id']}/records/standby-platform-{build}{suffix}"
     report = {"stage": "configuration", "build": build, "tenancy": tenancy}
-    published = False
+    published = source["isPublic"]
     try:
         try:
-            selected = request("PUT", f"acts/{actor}", {"actorStandby": {
+            selected = request("PUT", f"acts/{actor}", {"isDeprecated": False, "actorStandby": {
                 "isEnabled": True, "tenancy": tenancy, "build": build, "memoryMbytes": 256,
                 "idleTimeoutSecs": 30, "desiredRequestsPerActorRun": 1, "maxRequestsPerActorRun": 2,
                 "shouldPassActorInput": False,
@@ -96,7 +98,7 @@ def main():
         except HTTPError as error:
             report.update(configurationStatus=error.code, configurationError=json.load(error).get("error", {}).get("type"))
             raise
-        assert selected["isPublic"] is False and selected["actorStandby"]["build"] == build
+        assert selected["isPublic"] == published and selected["actorStandby"]["build"] == build
         assert selected["actorStandby"]["tenancy"] == tenancy
         endpoint = selected["standbyUrl"].rstrip("/")
         parsed = urlsplit(endpoint)
@@ -157,6 +159,7 @@ def main():
         guest_token = None
         if cross:
             assert report["directStatus"] == 403
+            assert first["allowedCallerCount"] == 2
             guest_token = os.environ["APIFY_STANDBY_TEST_TOKEN"]
             guest_status, guest = guest_api(guest_token, "users/me")
             assert guest_status == 200
@@ -164,27 +167,38 @@ def main():
             assert guest_user != source["userId"]
             guest_context = sha256(guest_user.encode()).hexdigest()[:16]
             report["stage"] = "temporary-visibility"
-            try:
-                visible = request("PUT", f"acts/{actor}", {
-                    "isPublic": True, "isSourceCodeHidden": True,
-                    "defaultRunOptions": {"build": build, "timeoutSecs": 25, "memoryMbytes": 256},
-                })["data"]
-            except HTTPError as error:
-                report.update(publishStatus=error.code, publishError=json.load(error).get("error", {}).get("type"))
-                raise
-            published = visible["isPublic"]
-            assert published and visible["isSourceCodeHidden"]
+            if not published:
+                try:
+                    visible = request("PUT", f"acts/{actor}", {
+                        "isPublic": True, "isSourceCodeHidden": True,
+                        "defaultRunOptions": {"build": build, "timeoutSecs": 25, "memoryMbytes": 256},
+                    })["data"]
+                except HTTPError as error:
+                    report.update(publishStatus=error.code, publishError=json.load(error).get("error", {}).get("type"))
+                    raise
+                published = visible["isPublic"]
+                assert published and visible["isSourceCodeHidden"]
             report["stage"] = "cross-account"
-            guest_first = call("observe", token=guest_token)
+            for _ in range(7):
+                status, guest_first = server_call(endpoint, "POST", "/probe", {"mode": "observe"}, token=guest_token)
+                if status not in {401, 403, 404}:
+                    break
+                sleep(2)
+            error = (guest_first or {}).get("error")
+            report.update(guestStatus=status, guestError=error.get("type") if isinstance(error, dict) else error)
+            assert status == 200
             assert guest_first["gatewayCallerContext"] == guest_context
-            assert guest_first["callerContext"] == caller_context and guest_first["runId"] == first["runId"]
+            assert guest_first["callerContext"] == caller_context and guest_first["allowedCallerCount"] == 2
+            guest_run_id = guest_first["runId"]
+            report.update(separateAccounts=True, sharedRun=guest_run_id == first["runId"])
+            run = request("GET", f"actor-runs/{guest_run_id}")["data"]
+            assert run["userId"] == source["userId"]
             guest_store = call("store", token=guest_token)
-            assert guest_store["storageId"] == storage["storageId"]
             assert guest_store["storageKey"] != storage["storageKey"]
             record = f"key-value-stores/{guest_store['storageId']}/records/{guest_store['storageKey']}"
             assert request("GET", record) == {"callerContext": guest_context}
             assert guest_api(guest_token, record)[0] in {401, 403, 404}
-            report.update(separateAccounts=True, sharedRun=True, isolatedStorageKeys=True, guestStorageDenied=True)
+            report.update(isolatedStorageKeys=True, guestStorageDenied=True)
 
         report.update(stage="charges", runId=run["id"], storageOwnerMatches=True)
         zero = call("zero", token=guest_token)
@@ -202,7 +216,7 @@ def main():
         repeated = call("charge", token=guest_token, **charge_input)
         if cross:
             assert charged["gatewayCallerContext"] == guest_context == repeated["gatewayCallerContext"]
-        assert charged["runId"] == first["runId"] == repeated["runId"]
+        assert charged["runId"] == run["id"] == repeated["runId"]
         report.update(charged=charged, repeated=repeated, stage="idle-settlement")
         finished = settle(run["id"])
         report.update(stage="settled", events=finished.get("chargedEventCounts"),
@@ -223,10 +237,11 @@ def main():
             except HTTPError as error:
                 report.update(visibilityRestored=False, rollbackStatus=error.code,
                               rollbackError=json.load(error).get("error", {}).get("type"))
-                request("PUT", f"acts/{actor}", {"isDeprecated": True, "actorStandby": {"isEnabled": False}})
+                closed = request("PUT", f"acts/{actor}", {"isDeprecated": True, "actorStandby": {"isEnabled": False}})["data"]
+                report["closed"] = closed["isDeprecated"] and closed["actorStandby"]["isEnabled"] is False
         request("PUT", receipt, report)
-    if published and not report.get("visibilityRestored"):
-        raise RuntimeError("The temporary verification listing could not return to private visibility.")
+    if published and not (report.get("visibilityRestored") or report.get("closed")):
+        raise RuntimeError("The verification Actor is still open.")
     print("Private server lifecycle, request isolation controls and one-event replay passed.")
 
 

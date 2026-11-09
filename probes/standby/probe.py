@@ -3,13 +3,13 @@
 import asyncio
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
-from os import environ
 import signal
 from urllib.parse import urlsplit
 
 from aiohttp import web
 from apify import Actor, Event
 from apify_client.errors import ApifyApiError
+from qa_callers import CALLER_HASHES
 
 
 EVENT_NAME = "probe-result"
@@ -28,7 +28,6 @@ def create_app(environment):
     context = sha256(runtime_user.encode()).hexdigest()[:16] if runtime_user else None
     platform_budget = environment["max_total_charge_usd"]
     standby_host = urlsplit(Actor.configuration.standby_url).hostname
-    allowed = frozenset(environ.get("REELSAID_STANDBY_QA_CALLERS", "").split())
     client = Actor.apify_client if at_home else None
     run = client.run(run_id) if client else None
 
@@ -47,7 +46,7 @@ def create_app(environment):
             or not gateway_context
             or not request.headers.get("X-Actor-Request-ID")
             or not request.headers.get("X-Apify-Standby-Caller-Type")
-            or (allowed and gateway_context not in allowed)
+            or (CALLER_HASHES and gateway_context not in CALLER_HASHES)
         ):
             return web.json_response({"error": "STANDBY_AUTH_REQUIRED"}, status=403)
         if request.content_type != "application/json":
@@ -67,6 +66,7 @@ def create_app(environment):
             "runId": run_id,
             "callerContext": context,
             "gatewayCallerContext": gateway_context,
+            "allowedCallerCount": len(CALLER_HASHES),
             "requestHost": request.host,
             "platformBudget": str(platform_budget) if platform_budget is not None else None,
             "authorizationForwarded": "Authorization" in request.headers,

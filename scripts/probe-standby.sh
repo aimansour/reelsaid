@@ -10,7 +10,7 @@ if [[ $mode == CROSS ]]; then
     workspace=$(mktemp -d)
     trap 'rm -rf -- "$workspace"' EXIT
     cp -R probes/standby/. "$workspace/"
-    python3 probes/standby/prepare-cross.py "$workspace/.actor/actor.json"
+    python3 probes/standby/prepare-cross.py "$workspace/qa_callers.py"
     package=$workspace
 fi
 push=$(apify actors push --dir "$package" --wait-for-finish 0 --json --user-agent "$user_agent")
