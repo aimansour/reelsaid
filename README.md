@@ -32,6 +32,8 @@ On the sample Reel, the hook starts with “One of my favorite quotes from Zig Z
 - **Follow public accounts.** Save a profile and schedule ReelSaid to pick up new Reels for a recurring research or monitoring workflow.
 - **Give AI agents the spoken content.** Pass the transcript and timing to an agent for search, summaries, or content analysis. Each result has a stable JSON shape and a per-video status.
 
+Try a saved Apify example with real inputs. [Make Reel subtitles](https://apify.com/aimansour/reelsaid/examples/reelsaid-reel-subtitles) · [Compare opening hooks](https://apify.com/aimansour/reelsaid/examples/reelsaid-compare-reel-hooks) · [Monitor a public account](https://apify.com/aimansour/reelsaid/examples/reelsaid-monitor-instagram-reels) · [Transcribe a Spanish Reel](https://apify.com/aimansour/reelsaid/examples/reelsaid-spanish-reel-transcript) · [Prepare transcripts for AI](https://apify.com/aimansour/reelsaid/examples/reelsaid-instagram-transcripts-for-ai)
+
 ## Transcribe in bulk or follow an account
 
 | Start with | What to enter |

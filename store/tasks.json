@@ -1,0 +1,118 @@
+[
+    {
+        "slug": "reelsaid-reel-subtitles",
+        "title": "Make SRT subtitles for an Instagram Reel",
+        "description": "Paste a public Instagram Reel to get its spoken text and timed SRT and WebVTT subtitles. Bring the subtitle files into your video editor, find the exact moment a quote starts, or turn a clip into accessible captions in its original language.",
+        "input": {
+            "startUrls": ["https://www.instagram.com/reel/DS46KJNjva9/"],
+            "includeSrt": true,
+            "includeVtt": true,
+            "wordLevelTimestamps": true
+        },
+        "publicConfig": {
+            "seoTitle": "Instagram Reel to SRT and WebVTT | ReelSaid",
+            "seoDescription": "Generate timed SRT and WebVTT subtitles from a public Instagram Reel. Get the original-language transcript and individual word timestamps.",
+            "inputSchemaFields": ["startUrls", "includeSrt", "includeVtt", "wordLevelTimestamps"],
+            "datasetView": "overview",
+            "faq": [
+                {"question": "How do I make subtitles for my Instagram Reel?", "answer": "ReelSaid's subtitle task takes a public Reel link. Paste it into Instagram URLs and start the task to get the timed transcript and subtitle files."},
+                {"question": "Where do I download my SRT and WebVTT files?", "answer": "ReelSaid's subtitle task includes SRT and WebVTT links in the result. Open a subtitle link with your Apify access and import the file into your editor."},
+                {"question": "Does the Reel subtitle task preserve the spoken language?", "answer": "ReelSaid creates subtitles in the original spoken language. Automatic language detection is on by default."}
+            ]
+        }
+    },
+    {
+        "slug": "reelsaid-compare-reel-hooks",
+        "title": "Compare opening hooks across Instagram Reels",
+        "description": "See what creators say in the first three seconds of their Reels. Start with two public clips, then paste your own list to compare hooks, opening lines, and scripts alongside the available post metrics.",
+        "input": {
+            "startUrls": [
+                "https://www.instagram.com/reel/DffV_VyjBwN/",
+                "https://www.instagram.com/reel/DfezWFYjQvJ/"
+            ],
+            "includeSrt": false,
+            "includeVtt": false
+        },
+        "publicConfig": {
+            "seoTitle": "Instagram Reel Hook Finder and Comparison | ReelSaid",
+            "seoDescription": "Compare the spoken hooks in the first three seconds of several Instagram Reels. Get opening lines, full transcripts, and available post metrics.",
+            "inputSchemaFields": ["startUrls"],
+            "datasetView": "overview",
+            "faq": [
+                {"question": "What does the Instagram Reel hook finder return?", "answer": "ReelSaid's hook finder returns any speech from the first three seconds, the full transcript, timing, and the original post metadata."},
+                {"question": "How do I compare Reels from different creators?", "answer": "Paste their public Instagram Reel links into the ReelSaid hook finder. The task returns one row for each distinct video so you can compare openings side by side."},
+                {"question": "Can I send the hook results to a spreadsheet?", "answer": "Export the ReelSaid hook dataset as CSV or Excel. Each row contains the transcript and opening hook for its video."}
+            ]
+        }
+    },
+    {
+        "slug": "reelsaid-monitor-instagram-reels",
+        "title": "Monitor new Reels from a public Instagram account",
+        "description": "Follow what a creator, brand, or newsroom says in its public Reels. Start with BBC News, replace the handle with an account you follow, and schedule the task to bring new spoken clips into your research or monitoring workflow.",
+        "input": {
+            "profiles": ["bbcnews"],
+            "maxResults": 3,
+            "sort": "newest",
+            "skipPinned": true,
+            "watchlistId": "instagram-news-reels",
+            "newReelsOnly": true
+        },
+        "publicConfig": {
+            "seoTitle": "Monitor New Instagram Reels and Transcripts | ReelSaid",
+            "seoDescription": "Monitor a public Instagram profile for new Reels. Get original-language transcripts and post details on your own Apify schedule.",
+            "inputSchemaFields": ["profiles", "maxResults", "watchlistId", "newReelsOnly"],
+            "datasetView": "overview",
+            "faq": [
+                {"question": "Can ReelSaid monitor public personal accounts?", "answer": "ReelSaid's monitoring task accepts a public personal, creator, or business Instagram handle or profile URL."},
+                {"question": "What does the first scheduled run return?", "answer": "ReelSaid monitoring can return eligible existing Reels on the first run. Later runs use your Apify account's answer history to skip previously answered videos."},
+                {"question": "How do I schedule Instagram Reel monitoring?", "answer": "Duplicate the ReelSaid monitoring task, add your public Instagram account, then attach an Apify schedule. Keep Only unanswered Reels enabled for recurring runs."}
+            ]
+        }
+    },
+    {
+        "slug": "reelsaid-spanish-reel-transcript",
+        "title": "Transcribe a Spanish Instagram Reel in Spanish",
+        "description": "Turn the spoken Spanish in a public Instagram Reel into a Spanish transcript with timestamps and subtitle files. Use the included clip to try the result, or bring your own Reel for content research, editing, or language study.",
+        "input": {
+            "startUrls": ["https://www.instagram.com/reel/Dfax6SllBLR/"],
+            "language": "es",
+            "includeSrt": true
+        },
+        "publicConfig": {
+            "seoTitle": "Spanish Instagram Reel to Text | ReelSaid",
+            "seoDescription": "Transcribe a Spanish Instagram Reel into Spanish text with timestamps and subtitles. Use the included sample or paste your own public Reel.",
+            "inputSchemaFields": ["startUrls", "language", "includeSrt"],
+            "datasetView": "overview",
+            "faq": [
+                {"question": "Does the Spanish Reel task translate the transcript?", "answer": "ReelSaid's Spanish Reel task writes the speech in Spanish. The timed text and subtitle files preserve the original spoken words."},
+                {"question": "Can I try ReelSaid with other spoken languages?", "answer": "Set ReelSaid's language field to auto for detection or choose a supported language code for your public Instagram video."},
+                {"question": "Can I use the Spanish transcript as subtitles?", "answer": "ReelSaid's Spanish Reel task returns a timed transcript and an SRT file when usable timing is available. Download the file from the result."}
+            ]
+        }
+    },
+    {
+        "slug": "reelsaid-instagram-transcripts-for-ai",
+        "title": "Turn Instagram Reels into transcript data for AI",
+        "description": "Bring public Instagram video records into an AI research workflow. Turn a list of posts into structured JSON with original-language transcripts, opening hooks, word timestamps, and source details for search, summaries, or quote extraction.",
+        "input": {
+            "datasetItems": [
+                {"postUrl": "https://www.instagram.com/reel/DfdAEEIA6oP/"},
+                {"postUrl": "https://www.instagram.com/reel/DffMmopAacr/"}
+            ],
+            "wordLevelTimestamps": true,
+            "includeSrt": false,
+            "includeVtt": false
+        },
+        "publicConfig": {
+            "seoTitle": "Instagram Reel Transcripts for AI Workflows | ReelSaid",
+            "seoDescription": "Turn Instagram Reel records into structured JSON for AI research. Get transcripts, opening hooks, word timestamps, and post metadata.",
+            "inputSchemaFields": ["datasetItems", "wordLevelTimestamps"],
+            "datasetView": "overview",
+            "faq": [
+                {"question": "What should an AI agent send to ReelSaid?", "answer": "Send ReelSaid public Instagram post records as datasetItems or give the Actor a readable Apify dataset ID. Keep the original post URL in each record."},
+                {"question": "Which fields should I use for quotes and source links?", "answer": "Use ReelSaid's transcript and wordLevelTimestamps for quotes, hook.text for the opening, and metadata.postUrl to link back to the original Instagram post."},
+                {"question": "How does an AI agent retrieve the transcript rows?", "answer": "Run ReelSaid through Apify MCP or the API with explicit sources. Read the returned dataset to get each transcript and its status, timestamps, and metadata."}
+            ]
+        }
+    }
+]
