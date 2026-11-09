@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "reelsaid-standby-probe",
+  "title": "ReelSaid Standby Verification",
+  "version": "0.1",
+  "usesStandbyMode": true,
+  "webServerSchema": "./openapi.json",
+  "dockerfile": "../Dockerfile"
+}
