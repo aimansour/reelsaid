@@ -17,7 +17,7 @@ on:
         required: false
         type: choice
         default: contract
-        options: [contract, single, batch, audio, input-a, input-b, standby]
+        options: [contract, single, batch, audio, input-a, input-b, standby, timing]
 
 permissions:
   contents: read
