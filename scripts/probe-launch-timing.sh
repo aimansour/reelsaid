@@ -50,6 +50,6 @@ file.write_text(source)
 PY
 
 bash "$scratch/scripts/deploy-actor.sh" "$public_package" launch-timing >"$scratch/build.json"
-build=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/build.json")
+build=$(jq -er '.build | select(.status == "SUCCEEDED") | .buildNumber' "$scratch/build.json")
 [[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er '.data.defaultRunOptions.build') == "$stable" ]]
 python3 scripts/benchmark-reelsaid.py --native-baseline "$build" --require-timings
