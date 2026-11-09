@@ -8,7 +8,8 @@ user_agent=apify-agent-skills/apify-actor-development
 actor=aimansour~reelsaid
 
 apify api GET "acts/$actor" --user-agent "$user_agent" >"$scratch/actor.json"
-stable=$(jq -er '.data | select(.isPublic == false) | .defaultRunOptions.build' "$scratch/actor.json")
+default_selection='.data | select(.isPublic == false) | .defaultRunOptions.build as $build | .taggedBuilds[$build].buildId // $build'
+stable=$(jq -er "$default_selection" "$scratch/actor.json")
 owner=$(jq -er '.data.userId' "$scratch/actor.json")
 mkdir -p "$scratch/scripts" "$scratch/src"
 cp -a .actor "$scratch/"
@@ -50,6 +51,8 @@ file.write_text(source)
 PY
 
 bash "$scratch/scripts/deploy-actor.sh" "$public_package" launch-timing >"$scratch/build.json"
-build=$(jq -er '.build | select(.status == "SUCCEEDED") | .buildNumber' "$scratch/build.json")
-[[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er '.data.defaultRunOptions.build') == "$stable" ]]
+build_id=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/build.json")
+build=$(apify api GET "actor-builds/$build_id" --user-agent "$user_agent" |
+    jq -er '.data | select(.status == "SUCCEEDED") | .buildNumber')
+[[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er "$default_selection") == "$stable" ]]
 python3 scripts/benchmark-reelsaid.py --native-baseline "$build" --require-timings
