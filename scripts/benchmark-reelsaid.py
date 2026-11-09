@@ -1,5 +1,6 @@
 """Compare bounded ReelSaid cloud cases using the original market observer."""
 
+import argparse
 import json
 from pathlib import Path
 from runpy import run_path
@@ -10,6 +11,29 @@ request, benchmark = market["request"], market["benchmark"]
 store_name = market["STORE"]
 actor = "aimansour~reelsaid"
 campaign = "allocation"
+
+
+def native_baseline(build, *, timings=False):
+    store = request("GET", f"key-value-stores/{store_name}")["data"]
+    if store["generalAccess"] != "RESTRICTED":
+        raise RuntimeError("Benchmark evidence requires restricted storage")
+    fixtures = json.loads(Path("tests/fixtures/market-reels.json").read_text())["launchReferences"]
+    cases = {
+        "extended": ["extended-captioned"],
+        "wildlife": ["wolves-captioned"],
+        "music": ["music-field"],
+        "panel": ["panel-captioned"],
+        "batch": ["field-report-captioned", "interview-captioned"],
+    }
+    for name, references in cases.items():
+        urls = [fixtures[reference]["url"] for reference in references]
+        record = f"key-value-stores/{store['id']}/records/native-{build}-{name}"
+        benchmark(actor, {"startUrls": urls, "forceRefresh": True}, 0.20, record,
+                  build=build, case=name, cache_condition="fresh",
+                  requested_ids=[url.strip("/").split("/")[-1] for url in urls], timings=timings)
+        observation = market["read_record"](record)
+        if observation.get("status") != "SUCCEEDED" or (timings and not observation.get("timings")):
+            raise RuntimeError(f"Baseline observation failed: {name}")
 
 
 def main():
@@ -41,4 +65,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--native-baseline", metavar="BUILD")
+    parser.add_argument("--require-timings", action="store_true")
+    args = parser.parse_args()
+    if args.native_baseline:
+        native_baseline(args.native_baseline, timings=args.require_timings)
+    else:
+        main()

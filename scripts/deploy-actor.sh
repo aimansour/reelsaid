@@ -14,4 +14,5 @@ if [[ -n $public_package ]]; then
     cp -- "$public_package/README.md" "$package/.actor/README.md"
 fi
 apify actors push --dir "$package" --build-tag "$build_tag" \
-    --no-apply-env-vars-to-build --wait-for-finish 300 --json
+    --no-apply-env-vars-to-build --wait-for-finish 300 --json \
+    --user-agent apify-agent-skills/apify-actor-development

@@ -130,8 +130,8 @@ def event_total(run):
     return round(total, 9)
 
 
-def benchmark(actor, payload, cap, record, *, memory=None, timeout=75, case=None, cache_condition="unknown",
-              requested_ids=()):
+def benchmark(actor, payload, cap, record, *, memory=None, build=None, timeout=75, case=None, cache_condition="unknown",
+              requested_ids=(), timings=False):
     report = {"actor": actor, "input": payload, "capUsd": cap, "status": "SUBMITTING"}
     if case:
         report.update(surface="native", case=case, cacheCondition=cache_condition, quality=None,
@@ -144,6 +144,8 @@ def benchmark(actor, payload, cap, record, *, memory=None, timeout=75, case=None
         options = {"maxTotalChargeUsd": cap, "timeout": timeout}
         if memory is not None:
             options["memory"] = memory
+        if build is not None:
+            options["build"] = build
         command = ["apify", "api", "POST", f"acts/{actor}/runs", "-p", json.dumps(options), "--user-agent", USER_AGENT]
         if payload is not None:
             command.extend(("-d", "-"))
@@ -173,12 +175,19 @@ def benchmark(actor, payload, cap, record, *, memory=None, timeout=75, case=None
             report.update(cacheCondition=observed_cache_condition(rows, cache_condition), firstUsableSeconds=first_text,
                           totalSeconds=total, completedVideoIds=completed_ids(rows),
                           settledChargeUsd=event_total(run))
-        if memory is not None:
-            report.update(memoryMbytes=memory, build=run.get("buildNumber"), stats=run.get("stats"),
+        if memory is not None or build is not None:
+            report.update(memoryMbytes=(run.get("options") or {}).get("memoryMbytes", memory),
+                          build=run.get("buildNumber"), stats=run.get("stats"),
                           usage=run.get("usage"), usageUsd=run.get("usageUsd"))
             store = run["defaultKeyValueStoreId"]
             for label, key in (("summary", "SUMMARY"), ("metrics", "REELSAID_METRICS")):
                 report[label] = read_record(f"key-value-stores/{store}/records/{key}")
+            if timings:
+                timing_record = f"key-value-stores/{store}/records/REELSAID_STAGE_TIMINGS"
+                report["timings"] = read_record(timing_record)
+                if report["timings"] is not None:
+                    request("PUT", record, report)
+                    request("DELETE", timing_record)
     except subprocess.CalledProcessError as exc:
         report.update(status="SUBMISSION_UNCONFIRMED", cliExit=exc.returncode,
                       cliResponse=exc.stderr if case else None)
