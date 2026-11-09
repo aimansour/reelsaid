@@ -11,6 +11,7 @@ if (
             bash scripts/ci-verify "$@"
     fi
     exec env -i HOME="$HOME" PATH="$PATH" APIFY_TOKEN="${APIFY_TOKEN:-}" \
+        APIFY_STANDBY_TEST_TOKEN="${APIFY_STANDBY_TEST_TOKEN:-}" \
         PACKAGE_ROOT="$package_root" RELEASE_PRICING_SHA256="${RELEASE_PRICING_SHA256:-}" \
         bash scripts/ci-verify "$@"
 ) >/dev/null 2>&1; then
