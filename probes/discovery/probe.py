@@ -4,14 +4,15 @@ import asyncio
 import re
 from dataclasses import replace
 from datetime import UTC, datetime
+from time import perf_counter
 
 from apify import Actor
 from curl_cffi.requests import AsyncSession, RequestsError
 
-from reelsaid.contracts import RunContext
-from reelsaid.discovery import discover
+from reelsaid.contracts import InputRef, RunContext
+from reelsaid.discovery import discover, videos_from_post
 from reelsaid.input import parse_input
-from reelsaid.instagram import InstagramClient
+from reelsaid.instagram import BASE, POST_QUERY, InstagramClient, InstagramError, _graphql_error, _media_id, _status_error, parse_post
 from reelsaid.media import MediaClient, inspect_media
 
 
@@ -26,8 +27,44 @@ class HtmlOnly(AsyncSession):
         raise RequestsError("Post GraphQL unavailable in this test")
 
 
+async def measure_guest_bootstrap():
+    fixtures = (
+        ("extended", "Ddi3q68I1BQ"), ("wildlife", "DehZj9wggt0"),
+        ("pyramid", "DfdAEEIA6oP"), ("carousel", CAROUSEL),
+    )
+    for index, (label, code) in enumerate(fixtures):
+        report, identities = {}, {}
+        for bootstrap in ((True, False) if index % 2 else (False, True)):
+            async with AsyncSession(impersonate="chrome", trust_env=False) as session:
+                client = InstagramClient(session)
+                client._ready = not bootstrap
+                started = perf_counter()
+                mode = "current" if bootstrap else "stateless"
+                try:
+                    response = await client._graphql(POST_QUERY, {"media_id": _media_id(code)}, f"{BASE}/p/{code}/")
+                    error = _status_error(response) or _graphql_error(response.text)
+                    post = None if error else parse_post(response.text, code)
+                    videos = videos_from_post(post, code, InputRef("probe")) if post else ()
+                    identities[mode] = tuple(
+                        (video.video_id, video.metadata.publisher, video.metadata.carousel_position, bool(video.video_url))
+                        for video in videos
+                    )
+                    report[mode] = {"status": response.status_code, "videos": len(videos),
+                                    "error": error.code if error else None, "bytes": len(response.content)}
+                except (RequestsError, InstagramError) as error:
+                    report[mode] = {"status": None, "videos": 0, "error": type(error).__name__}
+                report[mode]["seconds"] = round(perf_counter() - started, 3)
+        await Actor.push_data({
+            "case": label, **report,
+            "sameVideos": bool(identities.get("current")) and identities["current"] == identities.get("stateless"),
+        })
+
+
 async def main():
     async with Actor, AsyncSession(impersonate="chrome", trust_env=False) as session:
+        if (await Actor.get_input() or {}).get("measureGuestBootstrap") is True:
+            await measure_guest_bootstrap()
+            return
         instagram = InstagramClient(session)
         plan = parse_input({
             "startUrls": [f"https://www.instagram.com/reel/{SHORT}/?igsh=test"],

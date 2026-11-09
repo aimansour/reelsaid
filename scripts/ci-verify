@@ -63,6 +63,8 @@ case "$1" in
     compare)
         python3 -m unittest discover -s tests/automation -p test_market_benchmark.py
         case "${2:-contract}" in
+            retrieval-timing)
+                npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-discovery.sh '{"measureGuestBootstrap":true}' ;;
             timing|startup|cached-base|lean-media|timestamps|native)
                 npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-launch-timing.sh "$PACKAGE_ROOT" "$2" ;;
             *)
