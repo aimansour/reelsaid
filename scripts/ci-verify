@@ -69,6 +69,8 @@ case "$1" in
                 npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-standby.sh MULTI_TENANT ;;
             standby-cross)
                 npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-standby.sh CROSS ;;
+            standby-runtime)
+                npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-standby-runtime.sh "$PACKAGE_ROOT" ;;
             retrieval-timing)
                 npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-discovery.sh '{"measureGuestBootstrap":true}' ;;
             timing|startup|cached-base|lean-media|timestamps|native)
