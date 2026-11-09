@@ -126,6 +126,7 @@ def create_app(environment):
 async def main():
     async with Actor:
         if Actor.configuration.meta_origin != "STANDBY":
+            await Actor.push_data({"status": "ready"})
             Actor.log.info("Standby probe standard run completed.")
             return
         stop = asyncio.Event()

@@ -5,5 +5,8 @@
   "version": "0.1",
   "usesStandbyMode": true,
   "webServerSchema": "./openapi.json",
-  "dockerfile": "../Dockerfile"
+  "dockerfile": "../Dockerfile",
+  "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "storages": {"dataset": "./dataset_schema.json"}
 }

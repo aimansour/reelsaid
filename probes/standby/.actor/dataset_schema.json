@@ -1,0 +1,17 @@
+{
+  "actorSpecification": 1,
+  "title": "Readiness result",
+  "fields": {
+    "type": "object",
+    "properties": {
+      "status": {"title": "Status", "type": "string"}
+    }
+  },
+  "views": {
+    "overview": {
+      "title": "Readiness",
+      "transformation": {"fields": ["status"]},
+      "display": {"component": "table", "properties": {"status": {"label": "Status", "format": "text"}}}
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "title": "Standby verification",
+  "description": "Run the standard-mode readiness fixture.",
+  "schemaVersion": 1,
+  "type": "object",
+  "properties": {
+    "check": {
+      "title": "Readiness fixture",
+      "description": "Run one standard-mode readiness check.",
+      "type": "string",
+      "editor": "select",
+      "enum": ["readiness"],
+      "prefill": "readiness"
+    }
+  }
+}

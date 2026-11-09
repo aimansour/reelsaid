@@ -1,0 +1,12 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Readiness result",
+  "properties": {
+    "readiness": {
+      "type": "string",
+      "title": "Readiness result",
+      "description": "Read the standard-mode readiness fixture.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    }
+  }
+}
