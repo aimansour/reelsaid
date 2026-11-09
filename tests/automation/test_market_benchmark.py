@@ -41,6 +41,14 @@ class MarketBenchmarkTest(unittest.TestCase):
         self.assertFalse(matches(observed(), observed(cacheCondition="cached-repeat")))
         self.assertFalse(matches(observed(), observed(cacheCondition="unknown")))
 
+    def test_delivery_receipt_identifies_reused_transcript_without_cached_flag(self):
+        cached = benchmark["is_cached_result"]
+        self.assertTrue(cached({"cached": True}))
+        self.assertTrue(cached({"status": "transcribed", "charged": False,
+                                "statusReason": "Already delivered to your account on 2026-11-07: handed back."}))
+        self.assertFalse(cached({"status": "transcribed", "charged": False}))
+        self.assertFalse(cached({"status": "no_speech", "charged": False}))
+
     def test_rejects_shorter_workload(self):
         matches = summary["matched_timing"]
         self.assertTrue(matches(observed(), observed(completedVideoIds=["b", "a"])))

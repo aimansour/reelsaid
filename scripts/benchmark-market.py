@@ -69,6 +69,21 @@ def usable(row):
     return False
 
 
+def is_cached_result(row):
+    reason = row.get("statusReason")
+    return row.get("cached") is True or (
+        row.get("charged") is False and isinstance(reason, str)
+        and reason.startswith("Already delivered to your account ")
+    )
+
+
+def observed_cache_condition(rows, declared):
+    results = [is_cached_result(row) for row in rows if usable(row)]
+    if any(results):
+        return "cached-repeat" if all(results) else "mixed-cache"
+    return declared
+
+
 def completed_ids(rows):
     ids = []
     for row in rows:
@@ -155,9 +170,7 @@ def benchmark(actor, payload, cap, record, *, memory=None, timeout=75, case=None
                       firstTranscriptSeconds=first_text, usageTotalUsd=run.get("usageTotalUsd"),
                       chargedEventCounts=run.get("chargedEventCounts"), rows=rows)
         if case:
-            if any(isinstance(row, dict) and row.get("cached") is True for row in rows):
-                cache_condition = "cached-repeat"
-            report.update(cacheCondition=cache_condition, firstUsableSeconds=first_text,
+            report.update(cacheCondition=observed_cache_condition(rows, cache_condition), firstUsableSeconds=first_text,
                           totalSeconds=total, completedVideoIds=completed_ids(rows),
                           settledChargeUsd=event_total(run))
         if memory is not None:
@@ -204,9 +217,8 @@ def standby_benchmark(actor, endpoint, payload, record, *, case, cache_condition
                 raise ValueError("Unexpected response rows")
             report.update(status="SUCCEEDED", httpStatus=response.status, response=result, rows=rows,
                           totalSeconds=total, completedVideoIds=completed_ids(rows),
+                          cacheCondition=observed_cache_condition(rows, cache_condition),
                           firstUsableSeconds=total if any(map(usable, rows)) else None)
-            if any(isinstance(row, dict) and row.get("cached") is True for row in rows):
-                report["cacheCondition"] = "cached-repeat"
     except HTTPError as exc:
         report.update(status="HTTP_ERROR", httpStatus=exc.code, response=exc.read(65536).decode(errors="replace"))
     except (OSError, ValueError) as exc:

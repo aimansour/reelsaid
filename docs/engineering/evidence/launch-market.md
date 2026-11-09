@@ -34,7 +34,7 @@ The comparison suite rejected a cached response, an unknown cache state, and two
 
 ## Live observations in progress
 
-The first fresh-attempt comparison on the 60-second captioned Reel delivered the following observations. The same observer measured first usable dataset output and terminal run completion. The ReelSaid and Steadyfetch texts had zero normalized word disagreement and passed all four independent caption anchors. The timing interval on ReelSaid was 0.02 to 60.37 seconds and on Steadyfetch it was 0 to 60.26 seconds. Identical words establish output agreement for this case. They leave processing order unknown.
+The first fresh-attempt comparison on the 60-second captioned Reel delivered the following observations. The same observer measured first usable dataset output and terminal run completion. The ReelSaid and Steadyfetch texts had zero normalized word disagreement and passed all four independent caption anchors. The timing interval on ReelSaid was 0.02 to 60.37 seconds and on Steadyfetch it was 0 to 60.26 seconds. Identical words establish output agreement for this case. They leave processing order unknown. The ReelSaid requests used the deployed default build `0.1.9`. The reviewed private release candidate `0.1.12` has separate evidence and remains unpublished. The speed runs used each Actor's native memory default, including 256 MB for ReelSaid and 2048 MB for Steadyfetch on this single request.
 
 | Actor | First usable text | Total | Caption anchors |
 | --- | ---: | ---: | ---: |
@@ -46,6 +46,8 @@ The first fresh-attempt comparison on the 60-second captioned Reel delivered the
 APISmith and SIÁN each differed from the ReelSaid text by approximately one normalized word on this case. Treat this as an early case observation until the remaining runs, reference checks, and workload matches are collected. [Live single-Reel campaign](https://github.com/aimansour/reelsaid/actions/runs/42511478923)
 
 The extended clip also qualified Lance API at 16.32 s first and 17.81 s total and Panix at 14.24 s first and 14.98 s total. Other native cases missed a reference anchor, returned coarse analysis beats or text without segments, exceeded the media timing bounds, or timed out. The observer learned the Lance API source URL and nested transcript shape and afanasenko's spoken transcript field from the actual outputs. A missing first-output observation stays null.
+
+The fresh 30-second wildlife Reel independently confirmed that Steadyfetch delivered all four caption anchors and the closing words with valid timestamps, at 5.30 s first and 6.64 s total. Panix passed the anchor and timing check at 14.65 s first and 15.19 s total. APISmith and Lance API missed one anchor each. ReelSaid took 11.58 s to the first usable partial and 12.52 s total. It delivered all four anchors and marked a two-word addition after the verified closing line as unsupported speech. That addition rules the result out for quality-equivalent speed ranking. Retest this clip after improving the output alongside the original 60-second match. [Fresh single-Reel follow-up](https://github.com/aimansour/reelsaid/actions/runs/42556586291)
 
 Steadyfetch Standby returned HTTP 200, a direct transcript, and one transcript event in 5.32 seconds for the single-Reel request. Its invalid input returned HTTP 200 in 3.78 seconds with a normalization note, an unavailable row, zero delivered transcripts, and zero charged events. Both responses had rows, summary, delivered and charged fields, notes, and a request ID. This validates the observable request and response pattern. [Standby observations](https://github.com/aimansour/reelsaid/actions/runs/42512099615)
 
@@ -60,3 +62,14 @@ The mixed English, Spanish, and music batch gave ReelSaid two qualified transcri
 ReelSaid returned one `NO_SOURCE` row for an empty object or absent body and one `UNKNOWN_INPUT` row for a misspelled field. All three yielded zero transcripts and an explicit uncharged result. The owner candidate has no live price. The SDK counters for this Actor are unavailable in the benchmark, so the evidence for these cases is the uncharged rows and the runner contract.
 
 Steadyfetch attempted its default public creator in both the empty and absent-body cases. Both requests had zero saved source fields. The resulting rows and summaries identified the attempted default. Discovery stopped after about 54 seconds in each run with zero transcripts and zero charges. Its misspelled field returned an input error with a suggested field, zero transcripts, and zero charges. APISmith completed all three with empty datasets and zero charges. Lance API's submissions returned HTTP 400 in all three cases. APIMint and Tracefetch failed each submitted run with zero transcript events and one Actor-start event per run. This comparison supports keeping explicit input errors and requiring a selected source for ReelSaid. [Empty, absent, and misspelled input controls](https://github.com/aimansour/reelsaid/actions/runs/42512877703)
+
+| Actor | Malformed URL result | Settled events for malformed-only | Settled events for mixed request |
+| --- | --- | --- | --- |
+| ReelSaid | `INVALID_URL`, uncharged row | Owner candidate reports uncharged | Owner candidate delivered the correct source and flagged the malformed one |
+| Steadyfetch | Normalization note and `private_or_removed` | None | None on a previously observed source |
+| APISmith | Error message on result | None | One speech-to-text event |
+| Lance API | `invalid_url` | None | One transcript-minute event |
+| APIMint | `unavailable` | One Actor-start event | One Actor-start and one transcript event |
+| Tracefetch | `INVALID_URL` | One Actor-start event | One Actor-start event on a previously observed source |
+
+Every mixed request returned the intended 25-word English transcript with zero normalized word edits against the short reference. The malformed-only requests all yielded zero text. The result supports ReelSaid's per-input error, preserving valid neighbors in a mixed batch, and distinguishing a malformed URL from an unavailable Instagram source. [Malformed and mixed input controls](https://github.com/aimansour/reelsaid/actions/runs/42513326324)

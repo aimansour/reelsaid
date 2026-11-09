@@ -56,6 +56,22 @@
       "lastSpeechAtLeast": 55,
       "captionAnchors": ["How did you sense", "does understand the plumbing", "proponents of Brexit", "nothing to do with him"]
     },
+    "field-report-captioned": {
+      "url": "https://www.instagram.com/reel/DffV_VyjBwN/",
+      "durationSeconds": 49.526757,
+      "expected": "speech",
+      "firstSpeechBy": 2,
+      "lastSpeechAtLeast": 47,
+      "captionAnchors": ["people who were killed", "three minutes later", "of national mourning", "the city is very quiet"]
+    },
+    "interview-captioned": {
+      "url": "https://www.instagram.com/reel/DfezWFYjQvJ/",
+      "durationSeconds": 93.435692,
+      "expected": "speech",
+      "firstSpeechBy": 2,
+      "lastSpeechAtLeast": 91,
+      "captionAnchors": ["Trump was all", "has huge power to act", "this is a theocracy", "very hard one to win"]
+    },
     "multilingual-reference": {
       "dataset": "google/fleurs",
       "config": "ar_eg",
