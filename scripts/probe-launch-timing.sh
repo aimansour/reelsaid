@@ -4,10 +4,10 @@ set -euo pipefail
 public_package=${1:?The trusted public package is required}
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
-cli=(apify --user-agent apify-agent-skills/apify-actor-development)
+user_agent=apify-agent-skills/apify-actor-development
 actor=aimansour~reelsaid
 
-"${cli[@]}" api GET "acts/$actor" >"$scratch/actor.json"
+apify api GET "acts/$actor" --user-agent "$user_agent" >"$scratch/actor.json"
 stable=$(jq -er '.data | select(.isPublic == false) | .defaultRunOptions.build' "$scratch/actor.json")
 owner=$(jq -er '.data.userId' "$scratch/actor.json")
 mkdir -p "$scratch/scripts" "$scratch/src"
@@ -51,5 +51,5 @@ PY
 
 bash "$scratch/scripts/deploy-actor.sh" "$public_package" launch-timing >"$scratch/build.json"
 build=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/build.json")
-[[ $("${cli[@]}" api GET "acts/$actor" | jq -er '.data.defaultRunOptions.build') == "$stable" ]]
+[[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er '.data.defaultRunOptions.build') == "$stable" ]]
 python3 scripts/benchmark-reelsaid.py --native-baseline "$build" --require-timings
