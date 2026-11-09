@@ -244,6 +244,12 @@ def launch(group):
     store = request("GET", f"key-value-stores/{STORE}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
+    native_build = None
+    if group == "native-fresh":
+        actor = request("GET", "acts/aimansour~reelsaid")["data"]
+        if actor["isPublic"]:
+            raise RuntimeError("Fresh candidate measurements require a private build.")
+        native_build = actor["taggedBuilds"]["launch-native"]["buildNumber"]
     for item in cases:
         record = f"key-value-stores/{store['id']}/records/launch-{item['id']}"
         options = {"case": item["case"], "cache_condition": item.get("cacheCondition", "unknown"),
@@ -251,6 +257,8 @@ def launch(group):
         if item["surface"] == "standby":
             standby_benchmark(item["actor"], item["endpoint"], item.get("input"), record, **options)
         else:
+            if native_build and item["actor"] == "aimansour~reelsaid":
+                options["build"] = native_build
             benchmark(item["actor"], item.get("input"), item["capUsd"], record, **options)
 
 

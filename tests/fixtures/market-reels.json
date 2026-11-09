@@ -64,6 +64,28 @@
       "lastSpeechAtLeast": 47,
       "captionAnchors": ["people who were killed", "three minutes later", "of national mourning", "the city is very quiet"]
     },
+    "pyramid-captioned": {
+      "url": "https://www.instagram.com/reel/DfdAEEIA6oP/",
+      "durationSeconds": 84.628042,
+      "expected": "speech",
+      "firstSpeechBy": 1.5,
+      "lastSpeechAtLeast": 83,
+      "captionAnchors": ["smooth sided pyramids", "shift in religious beliefs", "reflect the sun", "set from then"]
+    },
+    "glacier-captioned": {
+      "url": "https://www.instagram.com/reel/Dfc85kkBKnV/",
+      "durationSeconds": 55.764042,
+      "expected": "speech",
+      "firstSpeechBy": 2,
+      "lastSpeechAtLeast": 48,
+      "captionAnchors": ["this is how a glacier sounds", "when snowfall stacks up long enough", "what defines a glacier", "ice that has come alive"]
+    },
+    "field-no-audio": {
+      "url": "https://www.instagram.com/reel/Dff9UEoCVae/",
+      "durationSeconds": 19.24,
+      "expected": "no_audio",
+      "reference": "The publisher labels the footage as having no sound. FFprobe found a video stream and zero audio streams."
+    },
     "interview-captioned": {
       "url": "https://www.instagram.com/reel/DfezWFYjQvJ/",
       "durationSeconds": 93.435692,

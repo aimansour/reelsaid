@@ -221,6 +221,31 @@ def test_subtitle_records_write_concurrently_before_delivering_the_row():
     asyncio.run(check())
 
 
+def test_interrupted_subtitle_write_resumes_without_charging_again():
+    class InterruptedOutput(Output):
+        async def put(self, key, value, content_type="application/json"):
+            if key.startswith("subtitle-vtt-"):
+                raise ApifyClientError("Subtitle write unavailable")
+            await super().put(key, value, content_type)
+
+    async def check():
+        case = Case()
+        first = case.context("subtitles-interrupted", output=InterruptedOutput("subtitles-interrupted"))
+        paused = await run({"shortcodes": [SHORT]}, first)
+        assert paused.stop_reason == "DELIVERY_INTERRUPTED"
+        assert first.output.rows == []
+        assert first.provider.events == {BASE_EVENT: 1}
+
+        resumed = case.context("subtitles-resumed")
+        await run({"resumeFromDatasetId": "subtitles-interrupted"}, resumed)
+        assert case.asr_calls == [SHORT]
+        assert resumed.provider.events == {}
+        assert len(resumed.output.rows) == 1
+        assert all(resumed.output.rows[0]["subtitles"].values())
+
+    asyncio.run(check())
+
+
 def test_ordered_budget_stop_and_resume():
     async def check():
         case = Case()

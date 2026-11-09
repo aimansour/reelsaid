@@ -1,4 +1,13 @@
 {
+  "native-fresh": [
+    {"id":"fresh-pyramid-reelsaid","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/DfdAEEIA6oP/"],"forceRefresh":true},"surface":"native","case":"fresh-pyramid","cacheCondition":"fresh","requestedVideoIds":["DfdAEEIA6oP"],"capUsd":0.15},
+    {"id":"fresh-pyramid-steady","actor":"steadyfetch~instagram-reel-transcript-scraper","input":{"reelUrls":["https://www.instagram.com/reel/DfdAEEIA6oP/"],"maxItems":1},"surface":"native","case":"fresh-pyramid","cacheCondition":"fresh","requestedVideoIds":["DfdAEEIA6oP"],"capUsd":0.15},
+    {"id":"fresh-pyramid-lance","actor":"lance_api~instagram-video-transcript-scraper","input":{"urls":["https://www.instagram.com/reel/DfdAEEIA6oP/"],"formats":["text","segments"]},"surface":"native","case":"fresh-pyramid","cacheCondition":"fresh","requestedVideoIds":["DfdAEEIA6oP"],"capUsd":0.15},
+    {"id":"fresh-glacier-reelsaid","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/Dfc85kkBKnV/"],"forceRefresh":true},"surface":"native","case":"fresh-glacier","cacheCondition":"fresh","requestedVideoIds":["Dfc85kkBKnV"],"capUsd":0.15},
+    {"id":"fresh-glacier-steady","actor":"steadyfetch~instagram-reel-transcript-scraper","input":{"reelUrls":["https://www.instagram.com/reel/Dfc85kkBKnV/"],"maxItems":1},"surface":"native","case":"fresh-glacier","cacheCondition":"fresh","requestedVideoIds":["Dfc85kkBKnV"],"capUsd":0.15},
+    {"id":"fresh-glacier-lance","actor":"lance_api~instagram-video-transcript-scraper","input":{"urls":["https://www.instagram.com/reel/Dfc85kkBKnV/"],"formats":["text","segments"]},"surface":"native","case":"fresh-glacier","cacheCondition":"fresh","requestedVideoIds":["Dfc85kkBKnV"],"capUsd":0.15},
+    {"id":"fresh-no-audio-reelsaid","actor":"aimansour~reelsaid","input":{"startUrls":["https://www.instagram.com/reel/Dff9UEoCVae/"],"forceRefresh":true},"surface":"native","case":"fresh-no-audio","cacheCondition":"fresh","requestedVideoIds":["Dff9UEoCVae"],"capUsd":0.15}
+  ],
   "single": [
     {"id":"single-extended-reelsaid","actor":"aimansour~reelsaid","surface":"native","case":"single-extended","cacheCondition":"fresh","requestedVideoIds":["Ddi3q68I1BQ"],"capUsd":0.15,"input":{"startUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"forceRefresh":true}},
     {"id":"single-extended-steady","actor":"steadyfetch~instagram-reel-transcript-scraper","surface":"native","case":"single-extended","cacheCondition":"fresh","requestedVideoIds":["Ddi3q68I1BQ"],"capUsd":0.15,"input":{"reelUrls":["https://www.instagram.com/reel/Ddi3q68I1BQ/"],"maxItems":1}},
