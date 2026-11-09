@@ -7,6 +7,7 @@ case "$mode" in
     timing) check=--compare-policies ;;
     startup|cached-base) check=--startup-check ;;
     lean-media) check=--lean-media-check ;;
+    timestamps) check=--compare-timestamps ;;
     native) check= ;;
     *) exit 2 ;;
 esac
@@ -87,6 +88,7 @@ edit(root / "__main__.py", {
     ),
     "        plan = parse_input(raw)": (
         '        timing.policy = raw.pop("_reelsaidTimingPolicy", "conditional")\n'
+        '        timing.segments_only = raw.pop("_reelsaidTimingSegmentsOnly", False) is True\n'
         '        if timing.policy not in {"conditional", "before", "after"}:\n'
         '            raise ValueError("Unknown timing policy.")\n'
         '        plan = parse_input(raw)'
@@ -114,6 +116,19 @@ edit(root / "quality.py", {
     ),
     "if not _suspect(draft, media):": 'if timing.policy != "after" and not _suspect(draft, media):',
 })
+if sys.argv[3] == "timestamps":
+    edit(root / "groq.py", {
+        "from .contracts import": "from . import _launch_timing as timing\nfrom .contracts import",
+        '            ("timestamp_granularities[]", "segment"), ("timestamp_granularities[]", "word"),':
+            '            ("timestamp_granularities[]", "segment"),',
+        '        if url is not None:\n            fields.append(("url", url))': (
+            '        if not timing.segments_only:\n'
+            '            fields.append(("timestamp_granularities[]", "word"))\n'
+            '        if url is not None:\n'
+            '            fields.append(("url", url))'
+        ),
+    })
+    edit(root / "__main__.py", {"rotation_seed=run_id": 'rotation_seed="timestamp-comparison"'})
 PY
 }
 

@@ -14,7 +14,7 @@ campaign = "allocation"
 
 
 def native_baseline(build, *, timings=False, compare_policies=False, startup_check=False, lean_media_check=False,
-                    verify_native=False):
+                    compare_timestamps=False, verify_native=False):
     store = request("GET", f"key-value-stores/{store_name}")["data"]
     if store["generalAccess"] != "RESTRICTED":
         raise RuntimeError("Benchmark evidence requires restricted storage")
@@ -31,6 +31,13 @@ def native_baseline(build, *, timings=False, compare_policies=False, startup_che
         experiments.extend(
             (name, cases[name], "conditional", None, "-repeat") for name in ("extended", "wildlife", "batch")
         )
+    if compare_timestamps:
+        experiments = [
+            (name, cases[name], "conditional", None, f"-{timestamps}-{index}")
+            for name in ("extended", "wildlife")
+            for index, order in ((1, ("words", "segments")), (2, ("segments", "words")))
+            for timestamps in order
+        ]
     if startup_check:
         experiments = [(name, cases[name], "conditional", None, "") for name in ("batch", "music")]
         experiments.extend(
@@ -55,6 +62,8 @@ def native_baseline(build, *, timings=False, compare_policies=False, startup_che
         payload = {"startUrls": urls, "forceRefresh": True}
         if policy != "conditional":
             payload["_reelsaidTimingPolicy"] = policy
+        if compare_timestamps and repeat.startswith("-segments"):
+            payload["_reelsaidTimingSegmentsOnly"] = True
         benchmark(actor, payload, 0.20, record,
                   build=build, case=name, cache_condition="fresh", memory=memory,
                   requested_ids=[url.strip("/").split("/")[-1] for url in urls], timings=timings)
@@ -122,10 +131,11 @@ if __name__ == "__main__":
     mode.add_argument("--compare-policies", action="store_true")
     mode.add_argument("--startup-check", action="store_true")
     mode.add_argument("--lean-media-check", action="store_true")
+    mode.add_argument("--compare-timestamps", action="store_true")
     args = parser.parse_args()
     if args.native_baseline:
         native_baseline(args.native_baseline, timings=args.require_timings, compare_policies=args.compare_policies,
                         startup_check=args.startup_check, lean_media_check=args.lean_media_check,
-                        verify_native=args.verify_native)
+                        compare_timestamps=args.compare_timestamps, verify_native=args.verify_native)
     else:
         main()

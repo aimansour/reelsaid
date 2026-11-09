@@ -9,6 +9,7 @@ START = perf_counter()
 START_UNIX_MS = round(time() * 1000)
 spans = []
 policy = "conditional"
+segments_only = False
 
 
 @contextmanager
