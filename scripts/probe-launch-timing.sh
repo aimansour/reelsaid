@@ -2,9 +2,11 @@
 set -euo pipefail
 
 public_package=${1:?The trusted public package is required}
-case "${2:-timing}" in
+mode=${2:-timing}
+case "$mode" in
     timing) check=--compare-policies ;;
-    startup) check=--startup-check ;;
+    startup|cached-base) check=--startup-check ;;
+    native) check= ;;
     *) exit 2 ;;
 esac
 scratch=$(mktemp -d)
@@ -15,15 +17,18 @@ actor=aimansour~reelsaid
 apify api GET "acts/$actor" --user-agent "$user_agent" >"$scratch/actor.json"
 default_selection='.data | select(.isPublic == false) | .defaultRunOptions.build as $build | .taggedBuilds[$build].buildId // $build'
 stable=$(jq -er "$default_selection" "$scratch/actor.json")
-owner=$(jq -er '.data.userId' "$scratch/actor.json")
-mkdir -p "$scratch/scripts" "$scratch/src"
-cp -a .actor "$scratch/"
-cp -a src/reelsaid "$scratch/src/"
-cp Dockerfile .dockerignore pyproject.toml uv.lock "$scratch/"
-cp scripts/install-quality-models scripts/deploy-actor.sh "$scratch/scripts/"
-cp scripts/launch_timing_overlay.py "$scratch/src/reelsaid/_launch_timing.py"
 
-python3 - "$scratch/src/reelsaid" "$owner" <<'PY'
+prepare_overlay() {
+    local owner
+    owner=$(jq -er '.data.userId' "$scratch/actor.json")
+    mkdir -p "$scratch/scripts" "$scratch/src"
+    cp -a .actor "$scratch/"
+    cp -a src/reelsaid "$scratch/src/"
+    cp Dockerfile .dockerignore pyproject.toml uv.lock "$scratch/"
+    cp scripts/install-quality-models scripts/deploy-actor.sh "$scratch/scripts/"
+    cp scripts/launch_timing_overlay.py "$scratch/src/reelsaid/_launch_timing.py"
+
+    python3 - "$scratch/src/reelsaid" "$owner" "$mode" <<'PY'
 from pathlib import Path
 import sys
 
@@ -37,6 +42,13 @@ def edit(file, changes):
 
 
 root = Path(sys.argv[1])
+if sys.argv[3] == "cached-base":
+    edit(root.parents[1] / "Dockerfile", {
+        "FROM python:3.12-slim-bookworm": (
+            "FROM apify/actor-python:3.12@sha256:"
+            "5d6bcde0bbc82bb4e2293e09bd7a7e037222e858acddc546a463c5aa51f69e2a"
+        ),
+    })
 edit(root / "__main__.py", {
     "import asyncio": "from . import _launch_timing as timing\n\nimport asyncio",
     '        env = Actor.get_env()': (
@@ -77,10 +89,22 @@ edit(root / "quality.py", {
     "if not _suspect(draft, media):": 'if timing.policy != "after" and not _suspect(draft, media):',
 })
 PY
+}
 
-bash "$scratch/scripts/deploy-actor.sh" "$public_package" launch-timing >"$scratch/build.json"
+project=$PWD
+tag=launch-native
+if [[ -n $check ]]; then
+    prepare_overlay
+    project=$scratch
+    tag=launch-timing
+fi
+bash "$project/scripts/deploy-actor.sh" "$public_package" "$tag" >"$scratch/build.json"
 build_id=$(jq -er '.build | select(.status == "SUCCEEDED") | .id' "$scratch/build.json")
 build=$(apify api GET "actor-builds/$build_id" --user-agent "$user_agent" |
     jq -er '.data | select(.status == "SUCCEEDED") | .buildNumber')
 [[ $(apify api GET "acts/$actor" --user-agent "$user_agent" | jq -er "$default_selection") == "$stable" ]]
-python3 scripts/benchmark-reelsaid.py --native-baseline "$build" --require-timings "$check"
+options=(--native-baseline "$build")
+if [[ -n $check ]]; then
+    options+=(--require-timings "$check")
+fi
+python3 scripts/benchmark-reelsaid.py "${options[@]}"

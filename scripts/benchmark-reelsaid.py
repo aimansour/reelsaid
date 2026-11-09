@@ -27,7 +27,7 @@ def native_baseline(build, *, timings=False, compare_policies=False, startup_che
     }
     experiments = [(name, references, "conditional", None, "") for name, references in cases.items()]
     if startup_check:
-        experiments = [("batch", cases["batch"], "conditional", None, "")]
+        experiments = [(name, cases[name], "conditional", None, "") for name in ("batch", "music")]
         experiments.extend(
             (name, cases[name], "conditional", memory, "")
             for name in ("extended", "wildlife") for memory in (512, 256, 1024)
