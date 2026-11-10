@@ -62,11 +62,17 @@ def test_runtime_docker_context_keeps_source_last_and_excludes_private_artifacts
     }
 
 
-@pytest.mark.parametrize("effective_paid_plan", [False, True])
-def test_publish_requires_effective_approved_price_and_reconciles_lost_ack(tmp_path, effective_paid_plan):
+def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None):
     package = tmp_path / "public"
     (package / "store").mkdir(parents=True)
     (package / "store/listing.json").write_text('{"title":"ReelSaid"}\n')
+    definition = {
+        "slug": "reelsaid-example", "title": "Transcribe a Reel", "description": "Read the spoken text.",
+        "input": {"startUrls": ["https://www.instagram.com/reel/DS46KJNjva9/"]},
+        "publicConfig": {"inputSchemaFields": ["startUrls"], "datasetView": "overview"},
+    }
+    manifest = package / "store/tasks.json"
+    manifest.write_text(json.dumps([definition]))
     subprocess.run(["git", "init", "-q", str(package)], check=True)
     subprocess.run(["git", "-C", str(package), "add", "."], check=True)
     subprocess.run([
@@ -87,8 +93,29 @@ def test_publish_requires_effective_approved_price_and_reconciles_lost_ack(tmp_p
     state.write_text(json.dumps({
         "id": "actor", "isPublic": False, "isSourceCodeHidden": True,
         "actorPermissionLevel": "LIMITED_PERMISSIONS", "defaultRunOptions": {"build": "latest"},
-        "pricingInfos": plans,
+        "actorStandby": {"isEnabled": True, "build": "0.1.2"}, "pricingInfos": plans,
     }))
+    openapi_file = Path(".actor/web_server_schema.json")
+    openapi = json.loads(openapi_file.read_text())
+    if drift == "deployed-openapi":
+        openapi["info"]["title"] = "Changed title"
+    (tmp_path / "openapi.json").write_text(json.dumps(openapi))
+    task = {"id": "task", "actId": "actor", "name": definition["slug"], "isPublic": False,
+            **{key: value for key, value in definition.items() if key != "slug"}}
+    if drift == "saved-task":
+        task["input"] = {}
+    if drift == "saved-task-options":
+        task["options"] = {"build": "latest"}
+    (tmp_path / "task.json").write_text(json.dumps(task))
+    receipt = {
+        "source": source, "package": package_revision, "buildId": "build", "build": "0.1.2",
+        "openApiSha256": hashlib.sha256(openapi_file.read_bytes()).hexdigest(),
+        "taskManifestSha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "tasks": [{"slug": definition["slug"], "id": "task"}],
+    }
+    (tmp_path / "receipt.json").write_text(json.dumps(receipt))
+    if drift == "task-manifest":
+        manifest.write_text(json.dumps([{**definition, "description": "Changed task definition."}]))
     cli = tmp_path / "apify"
     cli.write_text("""#!/usr/bin/env python3
 import json
@@ -110,10 +137,15 @@ match args[:3]:
         result = {"data": {"id": "fixture", "generalAccess": "RESTRICTED"}}
     case ["api", "GET", "key-value-stores/fixture/records/CANDIDATE"]:
         assert state.with_suffix(".store-access").read_text() == "RESTRICTED"
-        result = {"source": os.environ["FIXTURE_SOURCE"], "package": os.environ["FIXTURE_PACKAGE"], "buildId": "build"}
+        result = json.loads(state.with_name("receipt.json").read_text())
+    case ["api", "GET", "actor-tasks/task"]:
+        result = {"data": json.loads(state.with_name("task.json").read_text())}
+    case ["api", "GET", "key-value-stores/fixture/records/TASK-reelsaid-example"]:
+        result = {"id": "task", "slug": "reelsaid-example", "build": "0.1.2", "verified": True}
     case ["api", "GET", "actor-builds/build"]:
         result = {"data": {"id": "build", "actId": "actor", "status": "SUCCEEDED", "buildNumber": "0.1.2",
                   "options": {"useCache": True}, "imageDigest": "a" * 64,
+                  "actorDefinition": {"webServerSchema": json.loads(state.with_name("openapi.json").read_text())},
                   "inputSchema": json.dumps({"properties": {"startUrls": {"prefill": ["https://www.instagram.com/reel/DS46KJNjva9/"]}}})}}
     case ["api", "POST", "acts/aimansour~reelsaid/runs"]:
         result = {"data": {"status": "SUCCEEDED", "buildId": "build", "stats": {"durationMillis": 1000},
@@ -138,17 +170,28 @@ print(json.dumps(result))
     cli.chmod(0o700)
     env = {
         **os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "PACKAGE_ROOT": str(package),
-        "FIXTURE_ACTOR": str(state), "FIXTURE_SOURCE": source, "FIXTURE_PACKAGE": package_revision,
+        "FIXTURE_ACTOR": str(state),
         "RELEASE_PRICING_SHA256": approved_digest,
     }
     result = subprocess.run(
         ["bash", "scripts/release-actor.sh", "publish", source, package_revision], env=env, capture_output=True,
     )
-    actor = json.loads(state.read_text())
+    return result, json.loads(state.read_text()), state.with_suffix(".writes")
+
+
+@pytest.mark.parametrize("effective_paid_plan", [False, True])
+def test_publish_requires_effective_approved_price_and_reconciles_lost_ack(tmp_path, effective_paid_plan):
+    result, actor, writes = publish_candidate(tmp_path, effective_paid_plan=effective_paid_plan)
     if effective_paid_plan:
         assert result.returncode == 0, result.stderr
         assert actor["isPublic"] and actor["defaultRunOptions"]["build"] == "0.1.2"
-        assert state.with_suffix(".writes").read_text() == "promotion\n"
+        assert writes.read_text() == "promotion\n"
     else:
         assert result.returncode != 0
-        assert not actor["isPublic"] and not state.with_suffix(".writes").exists()
+        assert not actor["isPublic"] and not writes.exists()
+
+
+@pytest.mark.parametrize("drift", ["deployed-openapi", "task-manifest", "saved-task", "saved-task-options"])
+def test_release_rejects_unverified_task_or_schema(tmp_path, drift):
+    result, actor, writes = publish_candidate(tmp_path, drift=drift)
+    assert result.returncode != 0 and not actor["isPublic"] and not writes.exists()

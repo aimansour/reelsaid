@@ -87,6 +87,36 @@ release_store() {
         jq -er --arg id "$id" '.data | select(.id == $id and .generalAccess == "RESTRICTED") | .id'
 }
 
+digest() {
+    local hash
+    hash=$(sha256sum -- "$1") || return
+    printf '%s\n' "${hash%% *}"
+}
+
+check_openapi() {
+    jq -e --slurpfile expected .actor/web_server_schema.json \
+        '.data.actorDefinition.webServerSchema == $expected[0]' "$scratch/build.json" >/dev/null
+}
+
+verified_tasks() {
+    local definitions definition slug proof task_id
+    definitions=$(jq -ec '.[]' "$task_manifest")
+    while IFS= read -r definition; do
+        slug=$(jq -er '.slug' <<< "$definition")
+        proof=$(apify api GET "key-value-stores/$store/records/TASK-$slug")
+        task_id=$(jq -er --arg slug "$slug" --arg build "$build_number" \
+            'select(.verified == true and .slug == $slug and .build == $build) | .id' <<< "$proof")
+        apify api GET "actor-tasks/$task_id" | jq -e --argjson want "$definition" \
+            --arg actor "$actor_id" --arg id "$task_id" '
+                .data as $task |
+                $task.actId == $actor and $task.id == $id and $task.name == $want.slug and $task.options == null and
+                $task.input == $want.input and $task.title == $want.title and $task.description == $want.description and
+                all($want.publicConfig | to_entries[]; $task.publicConfig[.key] == .value)
+            ' >/dev/null
+        jq -cn --arg slug "$slug" --arg id "$task_id" '{slug:$slug,id:$id}'
+    done <<< "$definitions"
+}
+
 get_actor
 if [[ $mode == periodic ]]; then
     smoke "$(default_build)" true
@@ -101,6 +131,10 @@ package_revision=$3
 [[ $(git rev-parse HEAD) == "$source_revision" ]]
 [[ $(git -C "$PACKAGE_ROOT" rev-parse HEAD) == "$package_revision" ]]
 
+actor_id=$(jq -er .data.id "$scratch/actor.json")
+task_manifest="$PACKAGE_ROOT/store/tasks.json"
+task_digest=$(digest "$task_manifest")
+openapi_digest=$(digest .actor/web_server_schema.json)
 store=$(release_store)
 receipt="key-value-stores/$store/records/CANDIDATE"
 case "$mode" in
@@ -125,18 +159,37 @@ case "$mode" in
         jq -e '.data.applyEnvVarsToBuild == false and .data.buildTag == "candidate" and
             any(.data.envVars[]; .name == "REELSAID_GROQ_KEYS" and .isSecret == true) and
             all(.data.sourceFiles[]; .name | endswith(".pyc") | not)' "$scratch/version.json" >/dev/null
+        check_openapi
         reject_empty "$build_number"
+        bash scripts/probe-launch-tasks.sh "$task_manifest"
+        verified_tasks > "$scratch/tasks.jsonl"
+        previous_options=$(jq -c '{actorStandby:.data.actorStandby}' "$scratch/actor.json")
+        python3 scripts/verify-standby-runtime.py "$build_number"
         jq -cn --arg source "$source_revision" --arg package "$package_revision" --arg buildId "$build_id" \
             --arg build "$build_number" --arg firstRun "$first_run" --arg freshRun "$fresh_run" \
-            '{source:$source,package:$package,buildId:$buildId,build:$build,firstRun:$firstRun,freshRun:$freshRun}' |
+            --arg openApiSha256 "$openapi_digest" --arg taskManifestSha256 "$task_digest" \
+            --slurpfile tasks "$scratch/tasks.jsonl" \
+            '{source:$source,package:$package,buildId:$buildId,build:$build,firstRun:$firstRun,freshRun:$freshRun,
+              openApiSha256:$openApiSha256,taskManifestSha256:$taskManifestSha256,tasks:$tasks}' |
             apify api PUT "$receipt" -d - >/dev/null
+        previous_options=
         ;;
     rehearse|publish)
         apify api GET "$receipt" > "$scratch/receipt.json"
         build_id=$(jq -er --arg source "$source_revision" --arg package "$package_revision" \
-            'select(.source == $source and .package == $package) | .buildId' "$scratch/receipt.json")
+            --arg openapi "$openapi_digest" --arg tasks "$task_digest" '
+                select(.source == $source and .package == $package and
+                       .openApiSha256 == $openapi and .taskManifestSha256 == $tasks) | .buildId
+            ' "$scratch/receipt.json")
         check_build "$build_id"
         build_number=$(jq -er .data.buildNumber "$scratch/build.json")
+        jq -e --arg build "$build_number" '.build == $build' "$scratch/receipt.json" >/dev/null
+        check_openapi
+        verified_tasks > "$scratch/tasks.jsonl"
+        jq -e --slurpfile tasks "$scratch/tasks.jsonl" '.tasks == $tasks' "$scratch/receipt.json" >/dev/null
+        jq -e --arg build "$build_number" '
+            .data.actorStandby.isEnabled == true and .data.actorStandby.build == $build
+        ' "$scratch/actor.json" >/dev/null
         ;;
     *)
         exit 2
@@ -158,12 +211,15 @@ if [[ $mode == rehearse ]]; then
         -d '{}' > "$scratch/rehearsal.json"
     jq -e '.data.status == "FAILED"' "$scratch/rehearsal.json" >/dev/null
     [[ $(default_build) == "$stable_id" ]]
-    previous_options=$(jq -c '{defaultRunOptions:.data.defaultRunOptions}' "$scratch/actor.json")
+    previous_options=$(jq -c '{defaultRunOptions:.data.defaultRunOptions,actorStandby:.data.actorStandby}' "$scratch/actor.json")
     set_default "$build_number"
     [[ $(default_build) == "$build_id" ]]
     smoke "$build_id" false
     apify api PUT "$actor" -d "$previous_options" >/dev/null
     [[ $(default_build) == "$stable_id" ]]
+    get_actor
+    jq -e --argjson previous "$previous_options" '.data.actorStandby == $previous.actorStandby' \
+        "$scratch/actor.json" >/dev/null
     previous_options=
 fi
 
@@ -178,7 +234,8 @@ if [[ $mode == publish ]]; then
     smoke "$build_id" false
     jq -c --arg build "$build_number" --slurpfile actor "$scratch/actor.json" '
         . + {isPublic:true,isSourceCodeHidden:true,exampleRunInput:null,
-        defaultRunOptions:($actor[0].data.defaultRunOptions | .build=$build)}' \
+        defaultRunOptions:($actor[0].data.defaultRunOptions | .build=$build),
+        actorStandby:($actor[0].data.actorStandby | .build=$build)}' \
         "$PACKAGE_ROOT/store/listing.json" > "$scratch/promotion.json"
     for attempt in 1 2 3; do
         apify api PUT "$actor" -d - < "$scratch/promotion.json" >/dev/null || true
