@@ -309,6 +309,52 @@ def test_committed_paid_result_keeps_billing_origin_across_interrupted_delivery(
     asyncio.run(check(True))
 
 
+def test_canonical_delivery_resume_handles_expired_source_and_ambiguous_prior_read():
+    async def check(delivered):
+        class InterruptedOutput(Output):
+            async def push(self, row):
+                if delivered:
+                    await super().push(row)
+                raise ApifyClientError("Dataset acknowledgement unavailable")
+
+        case = Case()
+
+        async def canonical_inspect(ref, context):
+            resolved = replace(ref, video_id=SHORT, metadata=replace(ref.metadata, shortcode=SHORT))
+            return await case.inspect(resolved, context)
+
+        async def unavailable_inspect(ref, context):
+            return Outcome("failed", "MEDIA_URL_EXPIRED", True)
+
+        async def unavailable_read(dataset_id):
+            raise ApifyClientError("Prior dataset unavailable")
+
+        async def read_previous(dataset_id):
+            assert dataset_id == "paid-dataset"
+            return first.output.rows
+
+        first = replace(case.context("paying-run", output=InterruptedOutput("paid-dataset")), inspect=canonical_inspect)
+        summary = await run({"startUrls": ["https://scontent.cdninstagram.com/video.mp4"]}, first)
+        assert summary.stop_reason == "DELIVERY_INTERRUPTED" and first.provider.events == {BASE_EVENT: 1}
+        source = {"resumeFromDatasetId": "paid-dataset"}
+        failed_read = replace(case.context("read-interrupted"), inspect=unavailable_inspect, read_previous=unavailable_read)
+        summary = await run(source, failed_read)
+        assert summary.stop_reason == "DELIVERY_INTERRUPTED" and summary.continuation.dataset_id == "paid-dataset"
+        assert not failed_read.output.rows and not failed_read.provider.events
+
+        resumed = replace(case.context("resumed"), inspect=unavailable_inspect, read_previous=read_previous)
+        summary = await run(source, resumed)
+        assert case.asr_calls == [SHORT] and not resumed.provider.events
+        if delivered:
+            assert not resumed.output.rows and summary.completed_dataset_ids == ("paid-dataset",)
+        else:
+            row, = resumed.output.rows
+            assert row["status"] == "success" and row["billingOriginRunId"] == "paying-run"
+
+    asyncio.run(check(False))
+    asyncio.run(check(True))
+
+
 def test_ordered_budget_stop_and_resume():
     async def check():
         case = Case()

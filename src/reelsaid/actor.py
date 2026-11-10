@@ -159,6 +159,8 @@ class _Run:
         self.filter_time = context.now
         self.restored = False
         self.resume_datasets: tuple[str, ...] = ()
+        self.retry_prior_dataset: str | None = None
+        self.resolved_pending: dict[str, VideoRef] = {}
 
     async def _push(self, row: JsonObject) -> None:
         await self.output.push(row)
@@ -176,7 +178,8 @@ class _Run:
                   "retrySources": sorted(self.retry_sources)}
         await self.state.save_checkpoint(
             self.state.tenant_id, self.output.dataset_id, Checkpoint(
-                tuple(_encode_video(item) for item in [*self.retry, *self.remaining]),
+                tuple(_encode_video(self.resolved_pending.get(item.video_id, item))
+                      for item in [*self.retry, *self.remaining]),
                 tuple(self.completed.values()), cursor, {
                     "input": self.raw, "now": self.filter_time.isoformat(),
                     "resumeDatasets": list(self.resume_datasets),
@@ -219,7 +222,9 @@ class _Run:
                 try:
                     prior = await self.context.read_previous(resume_id)
                 except ApifyClientError:
-                    prior = []
+                    self.retry_prior_dataset = resume_id
+                    self.stop_reason = "DELIVERY_INTERRUPTED"
+                    return False
             else:
                 self.rows = await self.output.existing()
                 prior = self.rows
@@ -459,6 +464,8 @@ class _Run:
             if actual.video_id in self.completed:
                 self.duplicates += 1
                 return None
+            self.resolved_pending[ref.video_id] = actual
+            await self._checkpoint()
             return await self._work(actual, batch, index, media)
         finally:
             if owns_media:
@@ -585,15 +592,15 @@ class _Run:
                 if self.remaining:
                     await self._checkpoint()
         continuation = None
-        if self.remaining or self.retry or self.retry_sources or self.source_cursor:
+        if self.remaining or self.retry or self.retry_sources or self.source_cursor or self.retry_prior_dataset:
             if not self.stop_reason and self.context.expired():
                 self.stop_reason = "TIME_LIMIT"
             if not self.stop_reason and self.source_cursor and self.options.max_results is not None:
                 self.stop_reason = "RESULT_LIMIT"
             self.stop_reason = self.stop_reason or "RETRYABLE_ITEMS"
             remaining = None if self.source_cursor or self.retry_sources else len(self.remaining) + len(self.retry)
-            continuation = Continuation(self.output.dataset_id, remaining, self.stop_reason)
-        if continuation or fresh or requested:
+            continuation = Continuation(self.retry_prior_dataset or self.output.dataset_id, remaining, self.stop_reason)
+        if (continuation or fresh or requested) and not self.retry_prior_dataset:
             await self._checkpoint()
         prior = tuple(dict.fromkeys(
             item["datasetId"] for item in self.completed.values() if item["datasetId"] != self.output.dataset_id
