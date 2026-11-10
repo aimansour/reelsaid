@@ -84,4 +84,18 @@ The exact reviewed build, `0.1.36`, passed these private hosted checks with the 
 
 The production pricing code accepted the exact tier rate at 180 seconds and reserved an additional $0.004 immediately above 180 seconds. At 181 seconds, the conservative Standby reservation was $0.015. The hosted pricing snapshot confirmed the additional-minute rate. The attempt to settle additional minutes on a 948.95-second Instagram video returned `TRANSCRIPTION_FAILED` and charged zero events in `cuq8TzdrwtthSkIh3`. Actual additional-minute settlement was observed in the earlier [isolated billing probe](billing.md). This production activation did not produce a qualifying long transcript.
 
-The Actor remains private. The publication workflow will select the exact reviewed native default and list the Actor on the owner’s launch request.
+At the end of pricing activation, the Actor was still private. The owner subsequently authorized publication.
+
+## Store launch
+
+The owner-dispatched [publication workflow](https://github.com/aimansour/reelsaid/actions/runs/42800084881) published build `0.1.36` with the pinned pricing and selected it for native runs and Standby. The public default build endpoint returned `F89em5RmojnqlC34g` with `SUCCEEDED`. The public Actor metadata confirmed hidden source, and the anonymous version endpoint exposed only the version number, build tag, and source type. GitHub reported zero public workflow artifacts and caches.
+
+Apify CLI published the five verified saved Tasks in the release order. Each public Markdown landing page returned its configured title, and the [Example tasks page](https://apify.com/aimansour/reelsaid/examples) linked all five. The public [GitHub package](https://github.com/aimansour/reelsaid) remains the documented source for workflows and examples.
+
+The approved 512 × 512 logo was uploaded and saved in Apify Console. The Actor API returned the Apify-hosted image, which was retrieved and inspected. The public Input, Pricing, Example tasks, Server, and API pages showed the new branding. The root page and README initially served an older CDN response with the placeholder, then both returned the new logo. The browser confirmed both Actor logo images loaded on the public input page.
+
+Native run `2DDzjma6Lib7NN43F` used the published default and returned 25 words with word timings and no repeat event. The public Standby endpoint returned authenticated readiness and a cached timed transcript with no repeat event. The hosted Apify MCP server exposed the branded Actor tool after publication. Its initial live fixture returned the retryable `TEMPORARILY_BLOCKED` status with zero charges. A second fixture returned 38 Spanish words and 38 word timestamps with one transcript event. A repeat via the stable Standby endpoint returned the same timed transcript from cache with zero events.
+
+The twelve-hour GitHub runner check passed on demand after publication using the same runner-local entry points as the schedule. The Actor quality dashboard recognized the public Actor and reported that score data had yet to arrive. [Runner verification](https://github.com/aimansour/reelsaid/actions/runs/42801538557)
+
+Six development Actors were deleted in the owner’s Apify Console. Owner-authorized API readback returned HTTP 404 for the discovery, output, transcription, state, retrieval, and billing probes. Apify disabled deletion in Console for the public paid Standby verification probe. The remaining probe is deprecated and has Standby disabled.
