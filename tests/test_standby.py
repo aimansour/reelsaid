@@ -13,7 +13,7 @@ from reelsaid import standby
 from reelsaid.billing import BASE_EVENT, BillingError
 from reelsaid.standby import create_app
 
-from test_actor import CAROUSEL, Case, LONG, SHORT
+from test_actor import CAROUSEL, Case, LONG, PRIVATE, SHORT
 from test_billing import Provider
 from test_state import FakeAccount
 
@@ -160,14 +160,17 @@ def test_logs_omit_request_data_and_credentials(caplog):
             response = await client.post("/", json={"reelUrl": SIGNED}, headers=headers())
             assert response.status == 200
             assert (await response.json())["rows"][0]["transcript"] == "One good sentence."
+            invalid = await client.post("/", json={"invalid": SIGNED}, headers=headers(request_id="invalid-request"))
+            assert invalid.status == 400
 
     asyncio.run(check())
     assert "SUCCESS" in caplog.text
+    assert "invalid-request rejected with UNKNOWN_INPUT" in caplog.text
     for private in (TOKEN, SIGNED, "One good sentence."):
         assert private not in caplog.text
 
 
-def test_openapi_matches_success_and_carousel_referral():
+def test_openapi_matches_success_item_outcomes_and_carousel_referral():
     def json_schema(value):
         if isinstance(value, list):
             return [json_schema(entry) for entry in value]
@@ -193,6 +196,15 @@ def test_openapi_matches_success_and_carousel_referral():
             result = await response.json()
             validate("TranscriptionResponse", result)
             assert result["rows"][0]["subtitles"]["vtt"]["content"].startswith("WEBVTT")
+            for params, code in (
+                ({"shortcodes": [PRIVATE]}, "CONTENT_UNAVAILABLE"),
+                ({"shortcodes": [SHORT], "maxDurationSeconds": 4}, "DURATION_LIMIT"),
+            ):
+                reply = await client.post("/", json=params, headers=headers(request_id=code))
+                assert reply.status == 200
+                outcome = await reply.json()
+                validate("TranscriptionResponse", outcome)
+                assert outcome["rows"][0]["errorCode"] == code and outcome["rows"][0]["quality"] is None
             carousel = await client.post("/", json={"shortcodes": [CAROUSEL]}, headers=headers(request_id="carousel"))
             assert carousel.status == 400
             error = await carousel.json()

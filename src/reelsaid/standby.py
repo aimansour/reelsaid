@@ -60,7 +60,9 @@ def _error(status: int, code: str, identity: RequestIdentity | None = None, *, r
     body = {"status": "failed", "errorCode": code, "retryable": retryable}
     if identity:
         body["requestId"] = identity.request_id
-    Actor.log.info("Standby request rejected with %s.", code)
+        Actor.log.info("Standby request %s rejected with %s.", identity.request_id, code)
+    else:
+        Actor.log.info("Standby request rejected with %s.", code)
     if code == "USE_NATIVE_RUN":
         body["nativeRunUrl"] = NATIVE_RUN
     return web.json_response(body, status=status)

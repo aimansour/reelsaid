@@ -161,7 +161,7 @@
           "wordLevelTimestamps": {"type": "array", "nullable": true, "items": {"$ref": "#/components/schemas/Timing"}},
           "hook": {"type": "object", "nullable": true},
           "metadata": {"type": "object", "nullable": true},
-          "quality": {"type": "object"},
+          "quality": {"type": "object", "nullable": true},
           "cached": {"type": "boolean"},
           "charged": {"type": "boolean", "nullable": true},
           "billedMinutes": {"type": "integer", "nullable": true},

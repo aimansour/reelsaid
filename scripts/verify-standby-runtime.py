@@ -49,6 +49,7 @@ def main():
         }})["data"]
         assert selected["isPublic"] is False and selected["defaultRunOptions"] == before["defaultRunOptions"]
         assert selected.get("pricingInfos") == before.get("pricingInfos")
+        report["standbySettings"] = selected["actorStandby"]
         url = selected["standbyUrl"].rstrip("/") + "/"
         endpoint = urlsplit(url)
         assert endpoint.scheme == "https" and endpoint.hostname.endswith(".apify.actor")
@@ -111,6 +112,8 @@ def main():
         report.update(stage="verified", native=True, standby=True, cachedRepeat=True, nativeDefaultPreserved=True)
     finally:
         api("PUT", evidence, report)
+    if len(sys.argv) > 2:
+        Path(sys.argv[2]).write_text(json.dumps(report["standbySettings"]))
     print("Exact private build passed native and Standby request checks.")
 
 

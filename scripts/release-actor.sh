@@ -164,13 +164,16 @@ case "$mode" in
         bash scripts/probe-launch-tasks.sh "$task_manifest"
         verified_tasks > "$scratch/tasks.jsonl"
         previous_options=$(jq -c '{actorStandby:.data.actorStandby}' "$scratch/actor.json")
-        python3 scripts/verify-standby-runtime.py "$build_number"
+        python3 scripts/verify-standby-runtime.py "$build_number" "$scratch/standby.json"
+        get_actor
+        jq -e --slurpfile expected "$scratch/standby.json" '.data.actorStandby == $expected[0]' \
+            "$scratch/actor.json" >/dev/null
         jq -cn --arg source "$source_revision" --arg package "$package_revision" --arg buildId "$build_id" \
             --arg build "$build_number" --arg firstRun "$first_run" --arg freshRun "$fresh_run" \
             --arg openApiSha256 "$openapi_digest" --arg taskManifestSha256 "$task_digest" \
-            --slurpfile tasks "$scratch/tasks.jsonl" \
+            --slurpfile tasks "$scratch/tasks.jsonl" --slurpfile standby "$scratch/standby.json" \
             '{source:$source,package:$package,buildId:$buildId,build:$build,firstRun:$firstRun,freshRun:$freshRun,
-              openApiSha256:$openApiSha256,taskManifestSha256:$taskManifestSha256,tasks:$tasks}' |
+              openApiSha256:$openApiSha256,taskManifestSha256:$taskManifestSha256,tasks:$tasks,standbySettings:$standby[0]}' |
             apify api PUT "$receipt" -d - >/dev/null
         previous_options=
         ;;
@@ -187,8 +190,9 @@ case "$mode" in
         check_openapi
         verified_tasks > "$scratch/tasks.jsonl"
         jq -e --slurpfile tasks "$scratch/tasks.jsonl" '.tasks == $tasks' "$scratch/receipt.json" >/dev/null
-        jq -e --arg build "$build_number" '
-            .data.actorStandby.isEnabled == true and .data.actorStandby.build == $build
+        jq -e --arg build "$build_number" --slurpfile receipt "$scratch/receipt.json" '
+            .data.actorStandby.isEnabled == true and .data.actorStandby.build == $build and
+            .data.actorStandby == $receipt[0].standbySettings
         ' "$scratch/actor.json" >/dev/null
         ;;
     *)

@@ -89,11 +89,15 @@ def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None):
         (json.dumps(paid_plan, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
 
+    standby_settings = {"isEnabled": True, "build": "0.1.2", "tenancy": "MULTI_TENANT", "shouldPassActorInput": False}
+    actor_standby = standby_settings if drift != "standby-config" else {
+        **standby_settings, "tenancy": "SINGLE_TENANT", "shouldPassActorInput": True,
+    }
     state = tmp_path / "actor.json"
     state.write_text(json.dumps({
         "id": "actor", "isPublic": False, "isSourceCodeHidden": True,
         "actorPermissionLevel": "LIMITED_PERMISSIONS", "defaultRunOptions": {"build": "latest"},
-        "actorStandby": {"isEnabled": True, "build": "0.1.2"}, "pricingInfos": plans,
+        "actorStandby": actor_standby, "pricingInfos": plans,
     }))
     openapi_file = Path(".actor/web_server_schema.json")
     openapi = json.loads(openapi_file.read_text())
@@ -111,6 +115,7 @@ def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None):
         "source": source, "package": package_revision, "buildId": "build", "build": "0.1.2",
         "openApiSha256": hashlib.sha256(openapi_file.read_bytes()).hexdigest(),
         "taskManifestSha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "standbySettings": standby_settings,
         "tasks": [{"slug": definition["slug"], "id": "task"}],
     }
     (tmp_path / "receipt.json").write_text(json.dumps(receipt))
@@ -191,7 +196,9 @@ def test_publish_requires_effective_approved_price_and_reconciles_lost_ack(tmp_p
         assert not actor["isPublic"] and not writes.exists()
 
 
-@pytest.mark.parametrize("drift", ["deployed-openapi", "task-manifest", "saved-task", "saved-task-options"])
+@pytest.mark.parametrize("drift", [
+    "deployed-openapi", "task-manifest", "saved-task", "saved-task-options", "standby-config",
+])
 def test_release_rejects_unverified_task_or_schema(tmp_path, drift):
     result, actor, writes = publish_candidate(tmp_path, drift=drift)
     assert result.returncode != 0 and not actor["isPublic"] and not writes.exists()

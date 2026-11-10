@@ -44,6 +44,14 @@ def claim_slot(video_id: str) -> int:
     return hashlib.sha256(video_id.encode()).digest()[0] % CLAIM_SHARDS
 
 
+def cacheable_outcome(status: Status, error_code: str | None) -> bool:
+    return status == "success" or status == "partial" and error_code == "TRANSCRIPT_PARTIAL"
+
+
+def definitive_outcome(status: Status, error_code: str | None) -> bool:
+    return cacheable_outcome(status, error_code) or status == "skipped" and error_code in DEFINITIVE_FREE
+
+
 @dataclass(frozen=True)
 class Lease:
     video_id: str
@@ -59,6 +67,10 @@ class CachedResult:
     revision: str
     status: Status
     payload: JsonObject
+
+    @property
+    def reusable(self) -> bool:
+        return cacheable_outcome(self.status, self.payload.get("row", {}).get("errorCode"))
 
 
 @dataclass(frozen=True)
@@ -179,7 +191,7 @@ class State:
             return CacheLookup()
         latest = CachedResult(**record["latest"])
         saved = record.get("successful")
-        return CacheLookup(latest, latest if latest.status == "success" else CachedResult(**saved) if saved else None)
+        return CacheLookup(latest, latest if latest.reusable else CachedResult(**saved) if saved else None)
 
     async def acquire(
         self, video_id: str, run_id: str, *, options: TranscriptOptions | None = None,
@@ -276,6 +288,9 @@ class State:
             }
             if lease.claim_id in self._staged:
                 return await self._get(key) == record
+            previous = await self._get(key)
+            if previous and (dataset_id := previous["payload"].get("datasetId")):
+                await self._set(_key("staged-delivery", previous["resultKey"], dataset_id), previous)
             await self._set(key, record)
             self._staged.add(lease.claim_id)
             return True
@@ -284,6 +299,18 @@ class State:
         if not self._owns(lease):
             return None
         return await self._get(_key("staged", _result_key(lease.video_id, options)))
+
+    async def load_pending_delivery(
+        self, video_id: str, options: TranscriptOptions, dataset_ids: tuple[str, ...],
+    ) -> JsonObject | None:
+        result_key = _result_key(video_id, options)
+        latest = await self._get(_key("staged", result_key))
+        for dataset_id in dataset_ids:
+            if latest and latest["payload"].get("datasetId") == dataset_id:
+                return latest
+            if saved := await self._get(_key("staged-delivery", result_key, dataset_id)):
+                return saved
+        return None
 
     async def load_settlement(self, lease: Lease, claim_id: str) -> JsonObject | None:
         if not self._owns(lease):
@@ -323,9 +350,9 @@ class State:
                     return False
             elif lease.claim_id not in self._staged:
                 return False
-            result = asdict(CachedResult(recovered_claim or lease.claim_id, status, payload))
-            record = {"latest": result}
-            if status != "success":
+            result = CachedResult(recovered_claim or lease.claim_id, status, payload)
+            record = {"latest": asdict(result)}
+            if not result.reusable:
                 previous = await self.lookup(self.tenant_id, lease.video_id, options)
                 if previous.successful:
                     record["successful"] = asdict(previous.successful)
@@ -344,9 +371,7 @@ class State:
         *, seen_at: datetime | None = None,
     ) -> AnswerState:
         current = await self.lookup_answer(tenant_id, watchlist_id, video_id)
-        if current.answered or outcome.retryable or (
-            outcome.status != "success" and (outcome.status != "skipped" or outcome.error_code not in DEFINITIVE_FREE)
-        ):
+        if current.answered or outcome.retryable or not definitive_outcome(outcome.status, outcome.error_code):
             return current
         seen = seen_at or datetime.now(UTC)
         await self._set(_key("answer", video_id), {

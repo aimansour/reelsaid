@@ -20,7 +20,7 @@ from .output import (
     SUMMARY_KEY, BillingFields, Continuation, RunSummary, SubtitleFiles, subtitle_files, subtitle_records, summarize, to_row,
 )
 from .quality import TranscriptResult, evaluate_video
-from .state import DEFINITIVE_FREE, AnswerState, Checkpoint, Lease, State, StateUnavailable, claim_slot
+from .state import AnswerState, Checkpoint, Lease, State, StateUnavailable, claim_slot, definitive_outcome
 
 
 class Output(Protocol):
@@ -135,7 +135,7 @@ def _payload(ref, outcome, options) -> JsonObject:
 
 
 def _definitive(row: JsonObject) -> bool:
-    return row["status"] == "success" or row["status"] == "skipped" and row["errorCode"] in DEFINITIVE_FREE
+    return definitive_outcome(row["status"], row["errorCode"])
 
 
 class _Run:
@@ -158,6 +158,7 @@ class _Run:
         self.stop_reason: str | None = None
         self.filter_time = context.now
         self.restored = False
+        self.resume_datasets: tuple[str, ...] = ()
 
     async def _push(self, row: JsonObject) -> None:
         await self.output.push(row)
@@ -176,7 +177,10 @@ class _Run:
         await self.state.save_checkpoint(
             self.state.tenant_id, self.output.dataset_id, Checkpoint(
                 tuple(_encode_video(item) for item in [*self.retry, *self.remaining]),
-                tuple(self.completed.values()), cursor, {"input": self.raw, "now": self.filter_time.isoformat()},
+                tuple(self.completed.values()), cursor, {
+                    "input": self.raw, "now": self.filter_time.isoformat(),
+                    "resumeDatasets": list(self.resume_datasets),
+                },
                 self.stop_reason,
             ),
         )
@@ -198,6 +202,9 @@ class _Run:
         self.raw = saved.filters["input"]
         self.restored = True
         self.filter_time = datetime.fromisoformat(saved.filters["now"])
+        self.resume_datasets = tuple(saved.filters.get("resumeDatasets", ()))
+        if resume_id and target not in self.resume_datasets:
+            self.resume_datasets = (target, *self.resume_datasets)
         self.plan = parse_input(self.raw)
         self.options = self.plan.options
         self.remaining = [_decode_video(item) for item in saved.pending]
@@ -347,11 +354,33 @@ class _Run:
             if not await self.state.renew(lease):
                 return
 
+    def _duration_reason(self, duration: Decimal) -> str | None:
+        filters = self.plan.filters
+        if filters.max_duration_seconds is not None and duration > Decimal(str(filters.max_duration_seconds)):
+            return "DURATION_LIMIT"
+        if filters.min_duration_seconds is not None and duration < Decimal(str(filters.min_duration_seconds)):
+            return "BELOW_MIN_DURATION"
+        return None
+
+    async def _render_saved(
+        self, ref: VideoRef, payload: JsonObject, answer: AnswerState, *,
+        cached: bool = False, receipt: ChargeReceipt | None = None, billing_origin: str | None = None,
+    ) -> JsonObject:
+        duration = payload["row"]["durationSeconds"]
+        if duration is not None and (reason := self._duration_reason(Decimal(str(duration)))):
+            measured = replace(ref, metadata=replace(ref.metadata, duration_seconds=duration))
+            return to_row(measured, Outcome("skipped", reason), BillingFields())
+        return await self._render(ref, payload, receipt or free_receipt(), answer,
+                                  cached=cached, billing_origin=billing_origin)
+
     async def _work(self, ref: VideoRef, batch: _Batch, index: int, media: MediaPlan | None = None) -> JsonObject | None:
         state, options = self.state, self.options.transcript
-        if self.options.new_reels_only and not self.options.force_refresh:
+        pending = (await state.load_pending_delivery(ref.video_id, options, self.resume_datasets)
+                   if self.resume_datasets else None)
+        skip_seen = self.options.new_reels_only and not self.options.force_refresh
+        if skip_seen:
             answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
-            if answer.answered:
+            if answer.answered and not pending:
                 return await self._skip_answered(ref, answer, batch, index)
             baseline = await state.lookup(state.tenant_id, ref.video_id, options)
         else:
@@ -359,19 +388,20 @@ class _Run:
                 state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id),
                 state.lookup(state.tenant_id, ref.video_id, options),
             )
-        reusable = baseline.reusable and not self.options.force_refresh and baseline.successful.payload.get("runId") != state.run_id
+        reusable = (baseline.reusable and not pending and not self.options.force_refresh
+                    and baseline.successful.payload.get("runId") != state.run_id)
         if reusable and answer.answered:
-            row = await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True)
+            row = await self._render_saved(ref, baseline.successful.payload, answer, cached=True)
             return await self._deliver(row, batch, index)
         wait_until = monotonic() + self.context.claim_wait_seconds
         while True:
-            claim = await state.acquire(ref.video_id, state.run_id, options=options, baseline=baseline)
+            claim = await state.acquire(ref.video_id, state.run_id, options=options, baseline=None if pending else baseline)
             if claim.error_code == "RESULT_AVAILABLE":
                 answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
                 if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
                     return await self._skip_answered(ref, answer, batch, index)
                 result = (await state.lookup(state.tenant_id, ref.video_id, options)).result
-                row = await self._render(ref, result.payload, free_receipt(), answer, cached=result.status == "success")
+                row = await self._render_saved(ref, result.payload, answer, cached=result.reusable)
                 return await self._deliver(row, batch, index)
             if claim.value or monotonic() >= wait_until or self.context.expired():
                 break
@@ -384,22 +414,25 @@ class _Run:
         owns_media = media is None
         try:
             answer = await state.lookup_answer(state.tenant_id, self.options.watchlist_id, ref.video_id)
-            if self.options.new_reels_only and answer.answered and not self.options.force_refresh:
+            if skip_seen and answer.answered and not pending:
                 return await self._skip_answered(ref, answer, batch, index)
             if reusable:
-                row = await self._render(ref, baseline.successful.payload, free_receipt(), answer, cached=True)
+                row = await self._render_saved(ref, baseline.successful.payload, answer, cached=True)
                 return await self._deliver(row, batch, index)
             settlement = Settlement(state, self.context.provider, self.context.pricing.budget, options=options)
             staged = await state.load_stage(lease, options)
-            if staged and (staged["claimId"] != baseline.revision or staged["runId"] == state.run_id):
-                receipt = await settlement.recover(lease)
-                payload = staged["payload"]
-                if not await state.commit(lease, options, payload["row"]["status"], payload, recovered_claim=staged["claimId"]):
+            replay = pending or staged
+            if replay and (pending or replay["claimId"] != baseline.revision or replay["runId"] == state.run_id):
+                receipt = await settlement.recover(lease, replay)
+                payload = replay["payload"]
+                if replay == staged and not await state.commit(
+                    lease, options, payload["row"]["status"], payload, recovered_claim=replay["claimId"],
+                ):
                     raise StateUnavailable("Recovered result ownership was lost")
-                origin = staged["runId"] if staged["runId"] != state.run_id else None
+                origin = replay["runId"] if replay["runId"] != state.run_id else None
                 if origin and receipt.charged is not None:
                     receipt = free_receipt()
-                row = await self._render(ref, payload, receipt, answer, billing_origin=origin)
+                row = await self._render_saved(ref, payload, answer, receipt=receipt, billing_origin=origin)
                 return await self._deliver(row, batch, index)
             if media is None:
                 try:
@@ -442,11 +475,9 @@ class _Run:
 
     async def _evaluate(self, ref, media, lease, settlement, answer, batch: _Batch, index: int) -> JsonObject:
         duration = media.duration_seconds
-        filters, options = self.plan.filters, self.options.transcript
-        if filters.max_duration_seconds is not None and duration > Decimal(str(filters.max_duration_seconds)):
-            return to_row(ref, Outcome("skipped", "DURATION_LIMIT"), BillingFields())
-        if filters.min_duration_seconds is not None and duration < Decimal(str(filters.min_duration_seconds)):
-            return to_row(ref, Outcome("skipped", "BELOW_MIN_DURATION"), BillingFields())
+        options = self.options.transcript
+        if reason := self._duration_reason(duration):
+            return to_row(ref, Outcome("skipped", reason), BillingFields())
         budget = self.context.pricing.budget
         reservation = await batch.reserve(index, self.context.pricing.quote(duration) if media.audio else None)
         if batch.cutoff is not None and index >= batch.cutoff:
@@ -459,7 +490,7 @@ class _Run:
                     outcome = await self.context.evaluate(media, options, self.context)
             except TimeoutError:
                 outcome = Outcome("deferred", "TIME_LIMIT", True)
-            payload = {**_payload(ref, outcome, options), "runId": self.state.run_id}
+            payload = {**_payload(ref, outcome, options), "runId": self.state.run_id, "datasetId": self.output.dataset_id}
             if outcome.status not in {"success", "partial", "skipped"}:
                 return payload["row"]
             if not await self.state.stage(lease, options, payload):

@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from apify_client.errors import ApifyClientError
 
-from .contracts import TranscriptOptions
+from .contracts import JsonObject, TranscriptOptions
 from .state import Lease, State
 
 
@@ -301,9 +301,9 @@ class Settlement:
             totals = await self._save_floor(lease, lease.claim_id, record)
             return self._budget.complete(reservation, receipt, totals=totals)
 
-    async def recover(self, lease: Lease) -> ChargeReceipt | None:
+    async def recover(self, lease: Lease, staged: JsonObject | None = None) -> ChargeReceipt | None:
         async with self._budget.settlement_lock:
-            staged = await self._state.load_stage(lease, self._options)
+            staged = staged or await self._state.load_stage(lease, self._options)
             if not staged:
                 return None
             claim_id = staged["claimId"]

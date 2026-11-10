@@ -271,6 +271,44 @@ def test_interrupted_subtitle_write_resumes_without_charging_again():
     asyncio.run(check())
 
 
+def test_committed_paid_result_keeps_billing_origin_across_interrupted_delivery():
+    class InterruptedOutput(Output):
+        async def push(self, row):
+            raise ApifyClientError("Dataset write unavailable")
+
+    async def check(force_refresh):
+        case = Case()
+        first = case.context("paying-run", output=InterruptedOutput("first-dataset"))
+        paused = await run({"shortcodes": [SHORT], "forceRefresh": force_refresh}, first)
+        assert paused.stop_reason == "DELIVERY_INTERRUPTED" and not first.output.rows
+        assert first.provider.events == {BASE_EVENT: 1}
+
+        second = case.context("interrupted-resume", output=InterruptedOutput("second-dataset"))
+        paused_again = await run({"resumeFromDatasetId": "first-dataset"}, second)
+        assert paused_again.stop_reason == "DELIVERY_INTERRUPTED" and second.provider.events == {}
+
+        if force_refresh:
+            async def newer_transcript(media, options, context):
+                evaluated = await case.evaluate(media, options, context)
+                return replace(evaluated, value=replace(evaluated.value, text="A newer transcript."))
+
+            independent = replace(case.context("independent-refresh"), evaluate=newer_transcript)
+            refreshed = await run({"shortcodes": [SHORT], "forceRefresh": True}, independent)
+            assert refreshed.billed == 1 and independent.output.rows[0]["transcript"] == "A newer transcript."
+
+        resumed = case.context("completed-resume")
+        summary = await run({"resumeFromDatasetId": "second-dataset"}, resumed)
+        assert summary.successful == 1 and not summary.charged_events
+        assert case.asr_calls == ([SHORT, SHORT] if force_refresh else [SHORT]) and resumed.provider.events == {}
+        row, = resumed.output.rows
+        assert row["billingOriginRunId"] == "paying-run"
+        assert row["charged"] is False and row["chargedEvents"] == {}
+        assert row["transcript"] == "One good sentence."
+
+    asyncio.run(check(False))
+    asyncio.run(check(True))
+
+
 def test_ordered_budget_stop_and_resume():
     async def check():
         case = Case()
@@ -330,6 +368,33 @@ def test_watchlist_first_and_later_runs():
         assert case.inspect_calls == [NEXT]
         answered = next(row for row in second.output.rows if row["videoId"] == SHORT)
         assert answered["isNew"] is False and answered["firstSeenRunId"] == "first"
+    asyncio.run(check())
+
+
+def test_qualifying_partial_is_reused_and_counts_as_an_answer():
+    async def check():
+        case = Case()
+
+        async def at_threshold(media, options, context):
+            evaluated = await case.evaluate(media, options, context)
+            return Outcome("partial", "TRANSCRIPT_PARTIAL", value=replace(evaluated.value, assessment=Assessment(0.20)))
+
+        first = replace(case.context("partial-original"), evaluate=at_threshold)
+        inputs = {"shortcodes": [SHORT]}
+        watched = {**inputs, "newReelsOnly": True}
+        summary = await run(watched, first)
+        assert summary.partial == summary.billed == 1 and first.output.rows[0]["isNew"] is True
+
+        scheduled = replace(case.context("partial-next-schedule"), evaluate=at_threshold)
+        summary = await run(watched, scheduled)
+        assert summary.previously_answered == 1 and not scheduled.provider.calls
+        assert scheduled.output.rows[0]["errorCode"] == "ALREADY_ANSWERED"
+
+        cached = replace(case.context("partial-cache"), evaluate=at_threshold)
+        summary = await run(inputs, cached)
+        assert summary.partial == 1 and cached.output.rows[0]["cached"] is True
+        assert case.asr_calls == [SHORT] and not cached.provider.calls
+
     asyncio.run(check())
 
 
@@ -441,6 +506,22 @@ def test_duration_and_time_stops():
         assert result.skipped == 1 and not case.asr_calls
         assert single.output.rows[0]["errorCode"] == "DURATION_LIMIT"
     asyncio.run(check())
+
+
+def test_cached_results_use_measured_duration_for_new_run_filters():
+    async def check(duration, filters, reason):
+        case = Case()
+        case.known_durations[SHORT] = duration
+        input_ = {"shortcodes": [SHORT]}
+        assert (await run(input_, case.context("original"))).successful == 1
+        cached = case.context("filtered-cache")
+        result = await run({**input_, **filters}, cached)
+        assert result.skipped == 1 and case.asr_calls == [SHORT] and not cached.provider.calls
+        row, = cached.output.rows
+        assert row["durationSeconds"] == duration and row["errorCode"] == reason and row["transcript"] is None
+
+    asyncio.run(check(181, {"maxDurationSeconds": 180}, "DURATION_LIMIT"))
+    asyncio.run(check(4, {"minDurationSeconds": 6}, "BELOW_MIN_DURATION"))
 
 
 def test_dataset_response_loss_does_not_repeat_billing_or_paid_rows():
