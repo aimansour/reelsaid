@@ -355,6 +355,38 @@ def test_canonical_delivery_resume_handles_expired_source_and_ambiguous_prior_re
     asyncio.run(check(True))
 
 
+def test_resume_reconciles_delivery_even_when_another_item_sets_the_stop_reason():
+    class InterruptedOutput(Output):
+        async def push(self, row):
+            await super().push(row)
+            raise ApifyClientError("Dataset acknowledgement unavailable")
+
+    async def check():
+        case = Case()
+
+        async def evaluate(media, options, context):
+            if media.ref.video_id == SHORT:
+                return Outcome("deferred", "TIME_LIMIT", True)
+            return await case.evaluate(media, options, context)
+
+        first = replace(case.context("parallel", output=InterruptedOutput("parallel")), evaluate=evaluate, concurrency=2)
+        summary = await run({"shortcodes": [SHORT, NEXT]}, first)
+        assert summary.stop_reason == "TIME_LIMIT" and first.provider.events == {BASE_EVENT: 1}
+        assert [row["videoId"] for row in first.output.rows] == [NEXT]
+
+        async def read_previous(dataset_id):
+            assert dataset_id == "parallel"
+            return first.output.rows
+
+        resumed = replace(case.context("resumed"), read_previous=read_previous)
+        summary = await run({"resumeFromDatasetId": "parallel"}, resumed)
+        assert summary.completed_dataset_ids == ("parallel",)
+        assert [row["videoId"] for row in resumed.output.rows] == [SHORT]
+        assert resumed.provider.events == {BASE_EVENT: 1}
+
+    asyncio.run(check())
+
+
 def test_ordered_budget_stop_and_resume():
     async def check():
         case = Case()

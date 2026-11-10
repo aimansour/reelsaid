@@ -217,7 +217,7 @@ class _Run:
             position["profile_cursor"] = tuple(position["profile_cursor"])
         self.source_cursor = DiscoveryCursor(**position) if position else None
         self.retry_sources = set(saved.cursor.get("retrySources", ()))
-        if not resume_id or self.context.read_previous and saved.stop_reason in {None, "DELIVERY_INTERRUPTED"}:
+        if not resume_id or self.context.read_previous:
             if resume_id:
                 try:
                     prior = await self.context.read_previous(resume_id)
