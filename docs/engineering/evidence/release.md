@@ -65,6 +65,23 @@ The reviewed candidate is `0.1.36`, from private source `a1bc86d3050ecf2b512176f
 | Native MCP run | 5.666 s platform run | $0.000588 |
 | Standby fresh and cached | 3.715 s and 0.888 s server handler | $0.001150 for the instance, including idle time |
 
-The private checks incurred platform usage. The production Actor has no active or historical product price schedule. The owner will choose the numerical launch prices. The final suite passed 118 tests with four fixture-dependent skips, plus ten automation tests.
+The private checks incurred platform usage. At this checkpoint, the Actor had no active or historical product price schedule. The final suite passed 118 tests with four fixture-dependent skips, plus ten automation tests.
 
 The scheduled 12-hour monitor is pinned to the reviewed private source. A normal dispatch used the same runner-local entry points and passed with sanitized logs. [Final runner verification](https://github.com/aimansour/reelsaid/actions/runs/42746863000)
+
+## Owner-approved pricing activation
+
+The private Actor accepted the owner-approved pay-per-event schedule, effective from 2026-11-10 03:23:38 UTC. The applied schedule is recorded in [release-pricing.json](../release-pricing.json). Each qualifying video transcript includes its first three minutes. The first event costs $0.011 on Free, $0.010 on Bronze, $0.0095 on Silver, and $0.0088 on Gold, Platinum, and Diamond. Each additional started minute costs $0.004 across tiers. An owner-authorized API readback confirmed both events and all six rates. The digest of that effective schedule is pinned in the GitHub release secret.
+
+The exact reviewed build, `0.1.36`, passed these private hosted checks with the owner account.
+
+| Check | Native | Standby |
+| --- | --- | --- |
+| Fresh qualifying speech | `UUs7iF5v9fIobDmBB` reported one transcript event at the resolved Free price of $0.011. The Apify event counter agreed. | `Jo4Ie1a6JDmQTtj2q` recorded one transcript event and $0.011 of external charges. |
+| Repeat in the same interface | `BoB8wNbvp8LwcLzvq` returned the cached transcript with zero events. | Returned the cached transcript with zero events. |
+| Empty input and non-speech | `7wEzBzmxl3eCQ0iHD` returned `NO_SOURCE`. `HllVfjOM8YIcYITDQ` returned `NO_AUDIO` and `MUSIC_ONLY`. Both runs recorded zero events. | The empty request returned HTTP 400 with `INVALID_INPUT`. Music returned `MUSIC_ONLY`. Apify recorded zero external charges for controls on `ahKSd3ntqLKzecJjN`. |
+| Budget insufficient for the full quote | `UfnaX6hiMOX43wpHS` stopped with `SPEND_LIMIT` and zero events. | The same long input and base-price cap returned `SPEND_LIMIT` with zero events. |
+
+The production pricing code accepted the exact tier rate at 180 seconds and reserved an additional $0.004 immediately above 180 seconds. At 181 seconds, the conservative Standby reservation was $0.015. The hosted pricing snapshot confirmed the additional-minute rate. The attempt to settle additional minutes on a 948.95-second Instagram video returned `TRANSCRIPTION_FAILED` and charged zero events in `cuq8TzdrwtthSkIh3`. Actual additional-minute settlement was observed in the earlier [isolated billing probe](billing.md). This production activation did not produce a qualifying long transcript.
+
+The Actor remains private. The publication workflow will select the exact reviewed native default and list the Actor on the owner’s launch request.

@@ -1,0 +1,32 @@
+{
+    "pricingInfos": [
+        {
+            "pricingModel": "PAY_PER_EVENT",
+            "isPPEPlatformUsagePaidByUser": false,
+            "pricingPerEvent": {
+                "actorChargeEvents": {
+                    "reel-transcript": {
+                        "eventTitle": "Qualified video transcript",
+                        "eventDescription": "One eligible Instagram video transcript, including the first three minutes of video. Results without a qualifying transcript do not incur this event.",
+                        "isPrimaryEvent": true,
+                        "isOneTimeEvent": false,
+                        "eventTieredPricingUsd": {
+                            "FREE": {"tieredEventPriceUsd": 0.011},
+                            "BRONZE": {"tieredEventPriceUsd": 0.01},
+                            "SILVER": {"tieredEventPriceUsd": 0.0095},
+                            "GOLD": {"tieredEventPriceUsd": 0.0088},
+                            "PLATINUM": {"tieredEventPriceUsd": 0.0088},
+                            "DIAMOND": {"tieredEventPriceUsd": 0.0088}
+                        }
+                    },
+                    "additional-minute": {
+                        "eventTitle": "Additional video minute",
+                        "eventDescription": "Each started minute after the first three minutes of a qualifying Instagram video transcript.",
+                        "isOneTimeEvent": false,
+                        "eventPriceUsd": 0.004
+                    }
+                }
+            }
+        }
+    ]
+}

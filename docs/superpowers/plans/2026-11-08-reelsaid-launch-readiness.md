@@ -174,6 +174,6 @@
 
 **Consumes** · Task 11's exact reviewed candidate and the owner's last-stage price and release decision. **Produces** · The live Actor and discoverable published Tasks with verified pricing and entry points.
 
-- [ ] Present the measured operating cost and pricing implications. Get the owner's final numerical prices. Apply the selected effective schedule privately, verify the tiers, charged events, zero-charge controls, and full-quote spend behavior for native and Standby requests, and pin the verified pricing digest.
+- [x] Present the measured operating cost and pricing implications. Get the owner's final numerical prices. Apply the selected effective schedule privately, verify the tiers, charged events, zero-charge controls, and full-quote spend behavior for native and Standby requests, and pin the verified pricing digest.
 - [ ] On the owner's launch request, run the on-demand workflow for the exact candidate and publish the approved Tasks in the verified order. Confirm the effective prices, source visibility, and candidate identity.
 - [ ] Verify the visitor-facing Store page, GitHub links, Task discovery, real examples, native API and MCP, and live Standby endpoints. Confirm the scheduled runner and the supported Store quality signals. Record the release and commit.
