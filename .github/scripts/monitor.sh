@@ -20,12 +20,20 @@ if [[ ! "${SOURCE_REVISION:-}" =~ ^[0-9a-f]{40}$ ]] ||
     failure 'Source checkout failed'
 fi
 unset SOURCE_KEY SOURCE_REPOSITORY SOURCE_REVISION
-if timeout --kill-after=10s 8m bash .github/scripts/verify.sh "$scratch" runner-health >/dev/null 2>&1; then
-    printf '%s\n' 'Private verification passed.'
-else
-    status=$?
-    if [[ $status == 124 || $status == 137 ]]; then
-        failure 'Runtime check timed out'
+for attempt in 1 2; do
+    if timeout --kill-after=10s 225s bash .github/scripts/verify.sh "$scratch" runner-health >/dev/null 2>&1; then
+        printf '%s\n' 'Private verification passed.'
+        exit 0
+    else
+        status=$?
     fi
-    failure 'Runtime check failed'
-fi
+    case $status in
+        124|137)
+            if [[ $attempt == 2 ]]; then
+                failure 'Runtime check timed out'
+            fi
+            printf '%s\n' 'Private verification timed out. Retrying once.'
+            ;;
+        *) failure 'Runtime check failed' ;;
+    esac
+done
