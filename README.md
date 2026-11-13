@@ -18,10 +18,10 @@ mkdir -p storage/key_value_stores/default
 cat > storage/key_value_stores/default/INPUT.json <<'JSON'
 {"startUrls":["https://www.instagram.com/reel/DS46KJNjva9/"],"wordLevelTimestamps":true}
 JSON
-PATH="$PWD/.venv/bin:$PATH" PYTHONPATH="$PWD/src" apify run --entrypoint reelsaid
+PATH="$PWD/.venv/bin:$PATH" PYTHONPATH="$PWD/src" apify run --entrypoint reelsaid --user-agent apify-agent-skills/apify-actor-development
 ```
 
-The local dataset is written to `storage/datasets/default`. Local test runs do not require Groq credentials.
+The local dataset is written to `storage/datasets/default`. The automated tests use fixtures and can run without Groq credentials.
 
 ```bash
 ./scripts/verify all

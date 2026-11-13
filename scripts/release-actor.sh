@@ -49,7 +49,7 @@ check_build() {
 }
 
 smoke() {
-    local build_id=$1 force_refresh=$2 run_dataset
+    local build_id=$1 force_refresh=$2 run_dataset run_id
     check_build "$build_id"
     jq -c --argjson refresh "$force_refresh" '
         .data.inputSchema | fromjson | .properties | to_entries |
@@ -60,6 +60,15 @@ smoke() {
         '{build:$build,timeout:120,waitForFinish:60}' > "$scratch/options.json"
     apify api POST "$actor/runs" -p "$(cat "$scratch/options.json")" -d - \
         < "$scratch/input.json" > "$scratch/run.json"
+    if jq -e '.data.status == "READY" or .data.status == "RUNNING"' "$scratch/run.json" >/dev/null; then
+        run_id=$(jq -er '.data.id' "$scratch/run.json")
+        for _ in 1 2; do
+            apify api GET "actor-runs/$run_id" -p '{"waitForFinish":45}' > "$scratch/run.json"
+            if jq -e '.data.status != "READY" and .data.status != "RUNNING"' "$scratch/run.json" >/dev/null; then
+                break
+            fi
+        done
+    fi
     run_dataset=$(jq -er --arg id "$build_id" '.data | select(.status == "SUCCEEDED" and .buildId == $id
         and .stats.durationMillis < 300000) | .defaultDatasetId' "$scratch/run.json")
     apify datasets get-items "$run_dataset" --format json > "$scratch/rows.json"

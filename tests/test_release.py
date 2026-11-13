@@ -154,7 +154,11 @@ match args[:3]:
                   "actorDefinition": {"webServerSchema": json.loads(state.with_name("openapi.json").read_text())},
                   "inputSchema": json.dumps({"properties": {"startUrls": {"prefill": ["https://www.instagram.com/reel/DS46KJNjva9/"]}}})}}
     case ["api", "POST", "acts/aimansour~reelsaid/runs"]:
-        result = {"data": {"status": "SUCCEEDED", "buildId": "build", "stats": {"durationMillis": 1000},
+        status = "RUNNING" if os.environ.get("FIXTURE_DELAYED_RUN") else "SUCCEEDED"
+        result = {"data": {"id": "fixture-run", "status": status, "buildId": "build", "stats": {"durationMillis": 1000},
+                  "defaultDatasetId": "fixture"}}
+    case ["api", "GET", "actor-runs/fixture-run"]:
+        result = {"data": {"id": "fixture-run", "status": "SUCCEEDED", "buildId": "build", "stats": {"durationMillis": 1000},
                   "defaultDatasetId": "fixture"}}
     case ["datasets", "get-items", "fixture"]:
         result = [{"status": "success", "language": "en", "transcript": "speech", "wordCount": 25,
@@ -179,6 +183,8 @@ print(json.dumps(result))
         "FIXTURE_ACTOR": str(state),
         "RELEASE_PRICING_SHA256": approved_digest,
     }
+    if drift == "delayed-run":
+        env["FIXTURE_DELAYED_RUN"] = "1"
     result = subprocess.run(
         ["bash", "scripts/release-actor.sh", "publish", source, package_revision], env=env, capture_output=True,
     )
@@ -202,6 +208,12 @@ def test_release_preserves_public_actor_source(tmp_path):
     assert result.returncode == 0, result.stderr
     assert actor["isPublic"] and actor["isSourceCodeHidden"] is False
     assert writes.read_text() == "promotion\n"
+
+
+def test_release_waits_for_smoke_run_to_finish(tmp_path):
+    result, actor, _ = publish_candidate(tmp_path, drift="delayed-run")
+    assert result.returncode == 0, result.stderr
+    assert actor["isPublic"]
 
 
 @pytest.mark.parametrize("drift", [
