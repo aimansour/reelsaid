@@ -1,0 +1,7 @@
+{
+    "title": "ReelSaid — Instagram Reels Transcript API",
+    "description": "Transcribe public Instagram Reels to text with Whisper Large-v3. Get original-language transcripts, opening hooks, word timestamps, SRT and WebVTT, and post metadata. Send one Reel to the live API or process links, profiles, and datasets in bulk.",
+    "seoTitle": "Instagram Reels Transcript API | ReelSaid",
+    "seoDescription": "Transcribe Instagram Reels and profiles with Whisper Large-v3. Get timed text, word timestamps, opening hooks, SRT and WebVTT, and post metadata.",
+    "categories": ["SOCIAL_MEDIA", "VIDEOS", "AI"]
+}

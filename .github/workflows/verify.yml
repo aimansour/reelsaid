@@ -1,0 +1,56 @@
+name: Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact revision approved for verification
+        required: true
+        type: string
+      check:
+        description: Verification to run
+        required: true
+        type: choice
+        options: [pass, fail, run, cloud, measure, account, package, launch-tasks, periodic, runner-health, compare]
+      comparison:
+        description: Comparison case group
+        required: false
+        type: choice
+        default: contract
+        options: [contract, single, batch, audio, input-a, input-b, standby, standby-probe, standby-multi, standby-cross, standby-runtime, standby-cache, timing, startup, cached-base, lean-media, timestamps, native, native-fresh, native-repeat, retrieval-timing, release-comparison]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reelsaid-maintenance
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      github.actor == 'aimansour' &&
+      github.triggering_actor == 'aimansour'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run verification
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          CHECK_MODE: ${{ inputs.check }}
+          COMPARISON_GROUP: ${{ inputs.comparison }}
+          APIFY_TOKEN: ${{ inputs.check != 'runner-health' && secrets.APIFY_TOKEN || '' }}
+          APIFY_STANDBY_TEST_TOKEN: ${{ inputs.comparison == 'standby-cross' && secrets.APIFY_STANDBY_TEST_TOKEN || '' }}
+          REELSAID_GROQ_KEYS: ${{ inputs.check == 'runner-health' && secrets.RUNNER_GROQ_KEYS || '' }}
+        shell: bash
+        run: |
+          if [[ "$SOURCE_REVISION" != "$GITHUB_SHA" ]]; then
+            printf '%s\n' 'Approved source revision required.'
+            exit 1
+          fi
+          bash .github/scripts/verify.sh "$CHECK_MODE" "$COMPARISON_GROUP"

@@ -6,7 +6,7 @@ manifest=$1
 user_agent=apify-agent-skills/apify-actor-development
 api() { apify api "$@" --user-agent "$user_agent"; }
 actor=$(api GET acts/aimansour~reelsaid)
-build=$(jq -er '.data | select(.isPublic == false) | .taggedBuilds.candidate.buildNumber' <<< "$actor")
+build=$(jq -er '.data.taggedBuilds.candidate.buildNumber' <<< "$actor")
 build_id=$(jq -er '.data.taggedBuilds.candidate.buildId' <<< "$actor")
 store=$(api GET key-value-stores/aimansour~reelsaid-release-private |
     jq -er '.data | select(.generalAccess == "RESTRICTED") | .id')
@@ -17,7 +17,14 @@ options=$(jq -cn --arg build "$build" '{build:$build,timeout:90,waitForFinish:60
 while IFS= read -r task; do
     task_id=$(jq -er '.id' <<< "$task")
     slug=$(jq -er '.slug' <<< "$task")
-    run=$(api POST "actor-tasks/$task_id/runs" -p "$options")
+    if [[ $slug == reelsaid-monitor-instagram-reels ]]; then
+        # Each build verifies a first watchlist run independently of earlier examples.
+        input=$(jq -ce --arg slug "$slug" --arg id "release-check-$build" \
+            '.[] | select(.slug == $slug) | .input + {watchlistId:$id}' "$manifest")
+        run=$(api POST "actor-tasks/$task_id/runs" -p "$options" -d "$input")
+    else
+        run=$(api POST "actor-tasks/$task_id/runs" -p "$options")
+    fi
     receipt="key-value-stores/$store/records/TASK-$slug"
     jq -c --argjson task "$task" '.data | $task + {runId:.id,build:.buildNumber,datasetId:.defaultDatasetId}' <<< "$run" |
         api PUT "$receipt" -d - >/dev/null

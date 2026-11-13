@@ -10,16 +10,14 @@ from reelsaid.input import parse_input
 
 
 def test_task_examples_use_explicit_valid_sources():
-    if not (root := os.environ.get("PACKAGE_ROOT")):
-        pytest.skip("Set PACKAGE_ROOT to verify the public packaging checkout.")
-    tasks = json.loads((Path(root) / "store/tasks.json").read_text())
+    tasks = json.loads(Path("store/tasks.json").read_text())
     schema = json.loads(Path(".actor/input_schema.json").read_text())
     schema["additionalProperties"] = False
     views = json.loads(Path(".actor/dataset_schema.json").read_text())["views"]
     assert 4 <= len(tasks) <= 10
     assert len({task["slug"] for task in tasks}) == len({task["title"] for task in tasks}) == len(tasks)
     assert len({task["description"] for task in tasks}) == len(tasks)
-    readme = (Path(root) / "README.md").read_text()
+    readme = Path("README.md").read_text()
     for task in tasks:
         assert task["slug"].startswith("reelsaid-") and task["slug"].replace("-", "").isalnum()
         assert 3 <= len(task["title"]) <= 63 and 1 <= len(task["description"]) <= 400
@@ -90,3 +88,8 @@ print(json.dumps({"data": data}))
     assert result["created"] == result["updated"] == 1
     assert result["tasks"][0]["input"] == definition["input"]
     assert result["tasks"][0]["publicConfig"] == definition["publicConfig"]
+    result["tasks"][0].update(isPublic=True)
+    result["tasks"][0]["publicConfig"]["publishedAt"] = "2026-11-10T00:00:00Z"
+    state.write_text(json.dumps(result))
+    assert subprocess.check_output(command, env=env, text=True) == first
+    assert json.loads(state.read_text()) == result

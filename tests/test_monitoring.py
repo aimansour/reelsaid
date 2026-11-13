@@ -6,19 +6,15 @@ from pathlib import Path
 import pytest
 
 
-RUN_URL = "https://github.com/aimansour/reelsaid/actions/runs/123"
+RUN_URL = "https://github.com/wip-bunker-42/reelsaid/actions/runs/123"
 
 
 @pytest.fixture
 def monitor(tmp_path):
-    if not (root := os.environ.get("PACKAGE_ROOT")):
-        pytest.skip("Set PACKAGE_ROOT to the public workflow checkout")
+    root = Path(__file__).resolve().parents[1]
     scripts = tmp_path / ".github/scripts"
     scripts.mkdir(parents=True)
     shutil.copyfile(Path(root) / ".github/scripts/monitor.sh", scripts / "monitor.sh")
-    (scripts / "checkout-source.sh").write_text(
-        'printf "private-checkout-canary\\n" >&2\nexit "$TEST_CHECKOUT"\n'
-    )
     (scripts / "verify.sh").write_text(
         'printf "attempt\\n" >> runtime-attempts\n'
         'printf "private-runtime-canary\\n" >&2\n'
@@ -26,10 +22,10 @@ def monitor(tmp_path):
         'exit "$TEST_RETRY"\n'
     )
 
-    def run(checkout=0, runtime=0, retry=None):
-        env = {**os.environ, "SOURCE_REVISION": "a" * 40, "MONITOR_CASE": "normal",
-               "GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "aimansour/reelsaid",
-               "GITHUB_RUN_ID": "123", "TEST_CHECKOUT": str(checkout), "TEST_RUNTIME": str(runtime),
+    def run(scenario="normal", runtime=0, retry=None):
+        env = {**os.environ, "MONITOR_CASE": scenario,
+               "GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "wip-bunker-42/reelsaid",
+               "GITHUB_RUN_ID": "123", "TEST_RUNTIME": str(runtime),
                "TEST_RETRY": str(runtime if retry is None else retry)}
         result = subprocess.run(["bash", str(scripts / "monitor.sh")], cwd=tmp_path, env=env,
                                 capture_output=True, text=True, timeout=15)
@@ -41,7 +37,7 @@ def monitor(tmp_path):
 
 
 def test_failure_alert_before_runtime_starts(monitor):
-    result, started = monitor(checkout=1)
+    result, started = monitor(scenario="checkout-failure")
     assert result.returncode != 0 and not started
     assert result.stdout.count("::error ") == 1
     assert "Source checkout failed" in result.stdout and RUN_URL in result.stdout

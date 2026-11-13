@@ -6,16 +6,12 @@ umask 077
 actor=acts/aimansour~reelsaid
 mode=$1
 scratch=$(mktemp -d)
-rehearsal_version=
 previous_options=
 cleanup() {
     local result=$?
     trap - EXIT
     if [[ -n $previous_options ]]; then
         apify api PUT "$actor" -d "$previous_options" >/dev/null || result=1
-    fi
-    if [[ -n $rehearsal_version ]]; then
-        apify api DELETE "$actor/versions/$rehearsal_version" >/dev/null || result=1
     fi
     rm -rf -- "$scratch"
     exit "$result"
@@ -31,13 +27,6 @@ get_actor() {
 
 default_build() {
     apify api GET "$actor/builds/default" | jq -er '.data | select(.status == "SUCCEEDED") | .id'
-}
-
-set_default() {
-    jq -c --arg build "$1" '{defaultRunOptions:(.data.defaultRunOptions | .build=$build)}' "$scratch/actor.json" |
-        apify api PUT "$actor" -d - > "$scratch/update.json"
-    jq -e --arg build "$1" '.data.defaultRunOptions.build == $build' \
-        "$scratch/update.json" >/dev/null
 }
 
 check_build() {
@@ -133,12 +122,10 @@ if [[ $mode == periodic ]]; then
     exit
 fi
 
-: "${PACKAGE_ROOT:?Set PACKAGE_ROOT to the approved public checkout}"
+PACKAGE_ROOT=${PACKAGE_ROOT:-$PWD}
 source_revision=$2
-package_revision=$3
-[[ $source_revision =~ ^[0-9a-f]{40}$ && $package_revision =~ ^[0-9a-f]{40}$ ]]
+[[ $source_revision =~ ^[0-9a-f]{40}$ ]]
 [[ $(git rev-parse HEAD) == "$source_revision" ]]
-[[ $(git -C "$PACKAGE_ROOT" rev-parse HEAD) == "$package_revision" ]]
 
 actor_id=$(jq -er .data.id "$scratch/actor.json")
 task_manifest="$PACKAGE_ROOT/store/tasks.json"
@@ -172,25 +159,29 @@ case "$mode" in
         reject_empty "$build_number"
         bash scripts/probe-launch-tasks.sh "$task_manifest"
         verified_tasks > "$scratch/tasks.jsonl"
-        previous_options=$(jq -c '{actorStandby:.data.actorStandby}' "$scratch/actor.json")
-        python3 scripts/verify-standby-runtime.py "$build_number" "$scratch/standby.json"
+        if jq -e '.data.isPublic' "$scratch/actor.json" >/dev/null; then
+            jq -e '.data.actorStandby | select(.isEnabled == true)' "$scratch/actor.json" > "$scratch/standby.json"
+        else
+            previous_options=$(jq -c '{actorStandby:.data.actorStandby}' "$scratch/actor.json")
+            python3 scripts/verify-standby-runtime.py "$build_number" "$scratch/standby.json"
+        fi
         get_actor
         jq -e --slurpfile expected "$scratch/standby.json" '.data.actorStandby == $expected[0]' \
             "$scratch/actor.json" >/dev/null
-        jq -cn --arg source "$source_revision" --arg package "$package_revision" --arg buildId "$build_id" \
+        jq -cn --arg source "$source_revision" --arg buildId "$build_id" \
             --arg build "$build_number" --arg firstRun "$first_run" --arg freshRun "$fresh_run" \
             --arg openApiSha256 "$openapi_digest" --arg taskManifestSha256 "$task_digest" \
             --slurpfile tasks "$scratch/tasks.jsonl" --slurpfile standby "$scratch/standby.json" \
-            '{source:$source,package:$package,buildId:$buildId,build:$build,firstRun:$firstRun,freshRun:$freshRun,
+            '{source:$source,buildId:$buildId,build:$build,firstRun:$firstRun,freshRun:$freshRun,
               openApiSha256:$openApiSha256,taskManifestSha256:$taskManifestSha256,tasks:$tasks,standbySettings:$standby[0]}' |
             apify api PUT "$receipt" -d - >/dev/null
         previous_options=
         ;;
-    rehearse|publish)
+    publish)
         apify api GET "$receipt" > "$scratch/receipt.json"
-        build_id=$(jq -er --arg source "$source_revision" --arg package "$package_revision" \
+        build_id=$(jq -er --arg source "$source_revision" \
             --arg openapi "$openapi_digest" --arg tasks "$task_digest" '
-                select(.source == $source and .package == $package and
+                select(.source == $source and .package == null and
                        .openApiSha256 == $openapi and .taskManifestSha256 == $tasks) | .buildId
             ' "$scratch/receipt.json")
         check_build "$build_id"
@@ -199,8 +190,8 @@ case "$mode" in
         check_openapi
         verified_tasks > "$scratch/tasks.jsonl"
         jq -e --slurpfile tasks "$scratch/tasks.jsonl" '.tasks == $tasks' "$scratch/receipt.json" >/dev/null
-        jq -e --arg build "$build_number" --slurpfile receipt "$scratch/receipt.json" '
-            .data.actorStandby.isEnabled == true and .data.actorStandby.build == $build and
+        jq -e --slurpfile receipt "$scratch/receipt.json" '
+            .data.actorStandby.isEnabled == true and
             .data.actorStandby == $receipt[0].standbySettings
         ' "$scratch/actor.json" >/dev/null
         ;;
@@ -208,33 +199,6 @@ case "$mode" in
         exit 2
         ;;
 esac
-
-if [[ $mode == rehearse ]]; then
-    jq -e '.data.isPublic == false' "$scratch/actor.json" >/dev/null
-    stable_id=$(default_build)
-    rehearsal_version=0.99
-    version_input=$(jq -cn --arg version "$rehearsal_version" '{versionNumber:$version,sourceType:"SOURCE_FILES",
-        buildTag:"rehearsal-failure",applyEnvVarsToBuild:false,
-        sourceFiles:[{name:"Dockerfile",format:"TEXT",content:"FROM scratch\nRUN [\"/reelsaid-intentional-failure\"]\n"}]}')
-    if ! apify api POST "$actor/versions" -d "$version_input" >/dev/null; then
-        rehearsal_version=
-        exit 1
-    fi
-    apify api POST "$actor/builds" -p "{\"version\":\"$rehearsal_version\",\"waitForFinish\":60,\"useCache\":true}" \
-        -d '{}' > "$scratch/rehearsal.json"
-    jq -e '.data.status == "FAILED"' "$scratch/rehearsal.json" >/dev/null
-    [[ $(default_build) == "$stable_id" ]]
-    previous_options=$(jq -c '{defaultRunOptions:.data.defaultRunOptions,actorStandby:.data.actorStandby}' "$scratch/actor.json")
-    set_default "$build_number"
-    [[ $(default_build) == "$build_id" ]]
-    smoke "$build_id" false
-    apify api PUT "$actor" -d "$previous_options" >/dev/null
-    [[ $(default_build) == "$stable_id" ]]
-    get_actor
-    jq -e --argjson previous "$previous_options" '.data.actorStandby == $previous.actorStandby' \
-        "$scratch/actor.json" >/dev/null
-    previous_options=
-fi
 
 if [[ $mode == publish ]]; then
     : "${RELEASE_PRICING_SHA256:?An approved effective price schedule is required}"

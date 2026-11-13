@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+PACKAGE_ROOT=${PACKAGE_ROOT:-$PWD}
 
 printf '%s\n' 'REELSAID_PRIVATE_CANARY_5f2499a3'
 printf '%s\n' 'REELSAID_PRIVATE_CANARY_5f2499a3' >&2
@@ -36,20 +37,17 @@ case "$1" in
         npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-billing.sh
         ;;
     package)
-        : "${PACKAGE_ROOT:?The public checkout is required}"
         ensure_uv
         ./scripts/verify package
         bash scripts/probe-package.sh
         ;;
     launch-tasks)
-        : "${PACKAGE_ROOT:?The public checkout is required}"
         ensure_uv
         ./scripts/verify launch_tasks
         ./scripts/verify package
         npm exec --yes --package=apify-cli@1.11.0 -- bash scripts/probe-launch-tasks.sh "$PACKAGE_ROOT/store/tasks.json"
         ;;
     release)
-        : "${PACKAGE_ROOT:?The public checkout is required}"
         ensure_uv
         ./scripts/verify release
         ./scripts/verify package

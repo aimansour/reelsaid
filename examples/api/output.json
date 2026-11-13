@@ -1,0 +1,213 @@
+[
+  {
+    "schemaVersion": 1,
+    "kind": "video",
+    "videoId": "DS46KJNjva9",
+    "status": "success",
+    "errorCode": null,
+    "retryable": false,
+    "provenance": [
+      {
+        "field": "startUrls",
+        "index": 0,
+        "itemIndex": null
+      }
+    ],
+    "transcript": "One of my favorite quotes from Zig Ziglar is you don't have to be great to start but you have to start to be great",
+    "language": "en",
+    "durationSeconds": 8.892,
+    "wordCount": 25,
+    "segments": [
+      {
+        "text": "One of my favorite quotes from Zig Ziglar is you don't have to be great to start but you have to start to be great",
+        "startSeconds": 0.1,
+        "endSeconds": 8.5
+      }
+    ],
+    "timingGranularity": "sentence",
+    "wordLevelTimestamps": [
+      {
+        "text": "One",
+        "startSeconds": 0.1,
+        "endSeconds": 0.2
+      },
+      {
+        "text": "of",
+        "startSeconds": 0.2,
+        "endSeconds": 0.28
+      },
+      {
+        "text": "my",
+        "startSeconds": 0.28,
+        "endSeconds": 0.38
+      },
+      {
+        "text": "favorite",
+        "startSeconds": 0.38,
+        "endSeconds": 0.74
+      },
+      {
+        "text": "quotes",
+        "startSeconds": 0.74,
+        "endSeconds": 1.18
+      },
+      {
+        "text": "from",
+        "startSeconds": 1.18,
+        "endSeconds": 1.38
+      },
+      {
+        "text": "Zig",
+        "startSeconds": 1.38,
+        "endSeconds": 1.62
+      },
+      {
+        "text": "Ziglar",
+        "startSeconds": 1.62,
+        "endSeconds": 2
+      },
+      {
+        "text": "is",
+        "startSeconds": 2,
+        "endSeconds": 2.48
+      },
+      {
+        "text": "you",
+        "startSeconds": 4,
+        "endSeconds": 4.14
+      },
+      {
+        "text": "don't",
+        "startSeconds": 4.14,
+        "endSeconds": 4.38
+      },
+      {
+        "text": "have",
+        "startSeconds": 4.38,
+        "endSeconds": 4.6
+      },
+      {
+        "text": "to",
+        "startSeconds": 4.6,
+        "endSeconds": 4.74
+      },
+      {
+        "text": "be",
+        "startSeconds": 4.74,
+        "endSeconds": 4.86
+      },
+      {
+        "text": "great",
+        "startSeconds": 4.86,
+        "endSeconds": 5.18
+      },
+      {
+        "text": "to",
+        "startSeconds": 5.18,
+        "endSeconds": 5.4
+      },
+      {
+        "text": "start",
+        "startSeconds": 5.4,
+        "endSeconds": 5.84
+      },
+      {
+        "text": "but",
+        "startSeconds": 6.8,
+        "endSeconds": 6.94
+      },
+      {
+        "text": "you",
+        "startSeconds": 6.94,
+        "endSeconds": 7.08
+      },
+      {
+        "text": "have",
+        "startSeconds": 7.08,
+        "endSeconds": 7.26
+      },
+      {
+        "text": "to",
+        "startSeconds": 7.26,
+        "endSeconds": 7.44
+      },
+      {
+        "text": "start",
+        "startSeconds": 7.44,
+        "endSeconds": 7.8
+      },
+      {
+        "text": "to",
+        "startSeconds": 7.8,
+        "endSeconds": 8.04
+      },
+      {
+        "text": "be",
+        "startSeconds": 8.04,
+        "endSeconds": 8.16
+      },
+      {
+        "text": "great",
+        "startSeconds": 8.16,
+        "endSeconds": 8.5
+      }
+    ],
+    "hook": {
+      "text": "One of my favorite quotes from Zig Ziglar is",
+      "startSeconds": 0.1,
+      "endSeconds": 2.48,
+      "timingGranularity": "word"
+    },
+    "transcriptSource": "asr",
+    "metadata": {
+      "postUrl": "https://www.instagram.com/reel/DS46KJNjva9/",
+      "shortcode": "DS46KJNjva9",
+      "mediaId": "3799042069470574269",
+      "publisher": "jayshetty",
+      "discoveryProfiles": null,
+      "coauthors": null,
+      "caption": null,
+      "publishedAt": "2025-12-30T13:25:00+00:00",
+      "durationSeconds": 8.892,
+      "coverUrl": null,
+      "audio": {
+        "title": "Original audio",
+        "artist": null,
+        "id": "25476688788683588",
+        "isOriginal": true
+      },
+      "videoUrl": null,
+      "audioUrl": null,
+      "viewCount": null,
+      "playCount": null,
+      "likeCount": 50847,
+      "commentCount": 341,
+      "carouselPosition": null,
+      "pinned": null
+    },
+    "quality": {
+      "speechClassification": "speech",
+      "speechConfidence": null,
+      "affectedFraction": null,
+      "missingStart": null,
+      "missingEnd": null,
+      "missingInternal": null,
+      "defects": [],
+      "stopReason": null
+    },
+    "subtitles": {
+      "srt": null,
+      "vtt": null
+    },
+    "charged": false,
+    "billedMinutes": 0,
+    "chargedEvents": {},
+    "confirmedChargeUsd": 0,
+    "cached": false,
+    "isNew": null,
+    "firstSeenAt": null,
+    "firstSeenRunId": null,
+    "billingStatus": "free",
+    "billingOriginRunId": null
+  }
+]

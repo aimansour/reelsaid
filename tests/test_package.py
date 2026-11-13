@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import struct
 import subprocess
@@ -20,9 +19,7 @@ PUBLIC_FILES = ("README.md", "llms.txt", "assets", "examples", "store")
 
 @pytest.fixture
 def package():
-    if not (root := os.environ.get("PACKAGE_ROOT")):
-        pytest.skip("Set PACKAGE_ROOT to verify the public packaging checkout.")
-    checkout = Path(root)
+    checkout = Path(__file__).resolve().parents[1]
     assert (checkout / "README.md").is_file()
     return checkout
 

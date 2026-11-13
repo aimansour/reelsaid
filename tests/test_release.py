@@ -81,7 +81,6 @@ def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None, source_
         "commit", "-qm", "Approved package",
     ], check=True)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    package_revision = subprocess.check_output(["git", "-C", str(package), "rev-parse", "HEAD"], text=True).strip()
     paid_plan = {"pricingModel": "PAY_PER_EVENT", "startedAt": "2020-01-01T00:00:00.000Z"}
     plans = [paid_plan]
     if not effective_paid_plan:
@@ -113,7 +112,7 @@ def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None, source_
         task["options"] = {"build": "latest"}
     (tmp_path / "task.json").write_text(json.dumps(task))
     receipt = {
-        "source": source, "package": package_revision, "buildId": "build", "build": "0.1.2",
+        "source": source, "buildId": "build", "build": "0.1.2",
         "openApiSha256": hashlib.sha256(openapi_file.read_bytes()).hexdigest(),
         "taskManifestSha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
         "standbySettings": standby_settings,
@@ -186,7 +185,7 @@ print(json.dumps(result))
     if drift == "delayed-run":
         env["FIXTURE_DELAYED_RUN"] = "1"
     result = subprocess.run(
-        ["bash", "scripts/release-actor.sh", "publish", source, package_revision], env=env, capture_output=True,
+        ["bash", "scripts/release-actor.sh", "publish", source], env=env, capture_output=True,
     )
     return result, json.loads(state.read_text()), state.with_suffix(".writes")
 

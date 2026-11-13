@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact revision approved for the operation
+        required: true
+        type: string
+      operation:
+        description: Release operation
+        required: true
+        type: choice
+        options: [candidate, publish]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reelsaid-maintenance
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.actor == 'aimansour' &&
+      github.triggering_actor == 'aimansour' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run approved release operation
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          OPERATION: ${{ inputs.operation }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          RELEASE_PRICING_SHA256: ${{ secrets.RELEASE_PRICING_SHA256 }}
+        shell: bash
+        run: |
+          set -eu
+          if [[ "$SOURCE_REVISION" != "$GITHUB_SHA" ]]; then
+            printf '%s\n' 'Approved revision required.'
+            exit 1
+          fi
+          bash .github/scripts/verify.sh release "$OPERATION" "$SOURCE_REVISION"
