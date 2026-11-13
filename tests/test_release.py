@@ -37,6 +37,7 @@ esac
     assert (capture / ".actor/README.md").read_text() == "## Try it\n\nUse an explicit Reel link.\n"
     assert (capture / ".actor/input_schema.json").is_file()
     assert (capture / "Dockerfile").is_file() and (capture / "uv.lock").is_file()
+    assert (capture / "LICENSE").read_bytes() == Path("LICENSE").read_bytes()
     assert (capture / "src/reelsaid/__main__.py").is_file()
     assert all(path.suffix == ".py" for path in (capture / "src/reelsaid").iterdir())
     assert not (capture / ".git").exists() and not (capture / "docs").exists()
@@ -62,7 +63,7 @@ def test_runtime_docker_context_keeps_source_last_and_excludes_private_artifacts
     }
 
 
-def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None):
+def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None, source_hidden=True):
     package = tmp_path / "public"
     (package / "store").mkdir(parents=True)
     (package / "store/listing.json").write_text('{"title":"ReelSaid"}\n')
@@ -95,7 +96,7 @@ def publish_candidate(tmp_path, *, effective_paid_plan=True, drift=None):
     }
     state = tmp_path / "actor.json"
     state.write_text(json.dumps({
-        "id": "actor", "isPublic": False, "isSourceCodeHidden": True,
+        "id": "actor", "isPublic": False, "isSourceCodeHidden": source_hidden,
         "actorPermissionLevel": "LIMITED_PERMISSIONS", "defaultRunOptions": {"build": "latest"},
         "actorStandby": actor_standby, "pricingInfos": plans,
     }))
@@ -194,6 +195,13 @@ def test_publish_requires_effective_approved_price_and_reconciles_lost_ack(tmp_p
     else:
         assert result.returncode != 0
         assert not actor["isPublic"] and not writes.exists()
+
+
+def test_release_preserves_public_actor_source(tmp_path):
+    result, actor, writes = publish_candidate(tmp_path, source_hidden=False)
+    assert result.returncode == 0, result.stderr
+    assert actor["isPublic"] and actor["isSourceCodeHidden"] is False
+    assert writes.read_text() == "promotion\n"
 
 
 @pytest.mark.parametrize("drift", [

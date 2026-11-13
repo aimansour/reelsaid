@@ -16,7 +16,7 @@ def monitor(tmp_path):
     scripts = tmp_path / ".github/scripts"
     scripts.mkdir(parents=True)
     shutil.copyfile(Path(root) / ".github/scripts/monitor.sh", scripts / "monitor.sh")
-    (scripts / "private-source.sh").write_text(
+    (scripts / "checkout-source.sh").write_text(
         'printf "private-checkout-canary\\n" >&2\nexit "$TEST_CHECKOUT"\n'
     )
     (scripts / "verify.sh").write_text(

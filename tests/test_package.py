@@ -14,7 +14,7 @@ from reelsaid.standby import _input as parse_standby_input
 
 EXAMPLE_FILES = ("reel", "profile", "dataset")
 SYNC_URL = "https://api.apify.com/v2/acts/aimansour~reelsaid/run-sync-get-dataset-items?timeout=90"
-PUBLIC_REPO = r"github(?:usercontent)?\.com/aimansour/reelsaid/"
+PUBLIC_REPO = r"github(?:usercontent)?\.com/wip-bunker-42/reelsaid/"
 PUBLIC_FILES = ("README.md", "llms.txt", "assets", "examples", "store")
 
 

@@ -25,7 +25,7 @@ trap 'printf "Release operation failed at line %s.\n" "$LINENO" >&2' ERR
 
 get_actor() {
     apify api GET "$actor" > "$scratch/actor.json" || return
-    jq -e '.data.isSourceCodeHidden == true and .data.actorPermissionLevel == "LIMITED_PERMISSIONS"' \
+    jq -e '.data.actorPermissionLevel == "LIMITED_PERMISSIONS"' \
         "$scratch/actor.json" >/dev/null
 }
 
@@ -36,7 +36,7 @@ default_build() {
 set_default() {
     jq -c --arg build "$1" '{defaultRunOptions:(.data.defaultRunOptions | .build=$build)}' "$scratch/actor.json" |
         apify api PUT "$actor" -d - > "$scratch/update.json"
-    jq -e --arg build "$1" '.data.defaultRunOptions.build == $build and .data.isSourceCodeHidden' \
+    jq -e --arg build "$1" '.data.defaultRunOptions.build == $build' \
         "$scratch/update.json" >/dev/null
 }
 
@@ -237,7 +237,7 @@ if [[ $mode == publish ]]; then
     [[ $pricing_digest == "$RELEASE_PRICING_SHA256" ]]
     smoke "$build_id" false
     jq -c --arg build "$build_number" --slurpfile actor "$scratch/actor.json" '
-        . + {isPublic:true,isSourceCodeHidden:true,exampleRunInput:null,
+        . + {isPublic:true,isSourceCodeHidden:$actor[0].data.isSourceCodeHidden,exampleRunInput:null,
         defaultRunOptions:($actor[0].data.defaultRunOptions | .build=$build),
         actorStandby:($actor[0].data.actorStandby | .build=$build)}' \
         "$PACKAGE_ROOT/store/listing.json" > "$scratch/promotion.json"

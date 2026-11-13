@@ -8,7 +8,7 @@ trap 'rm -rf -- "$package"' EXIT
 mkdir -p "$package/.actor" "$package/scripts" "$package/src/reelsaid"
 cp .actor/*.json "$package/.actor/"
 cp src/reelsaid/*.py "$package/src/reelsaid/"
-cp Dockerfile .dockerignore pyproject.toml uv.lock "$package/"
+cp Dockerfile .dockerignore LICENSE pyproject.toml uv.lock "$package/"
 cp scripts/install-quality-models "$package/scripts/"
 if [[ -n $public_package ]]; then
     bash scripts/store-readme "$public_package/README.md" > "$package/.actor/README.md"
