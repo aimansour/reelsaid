@@ -4,7 +4,7 @@ Use an Apify API token in the `Authorization: Bearer` header. Set `APIFY_TOKEN` 
 
 ## Get one transcript with Standby
 
-The stable service address is `https://aimansour--reelsaid.apify.actor/`. Download `standby.json` to use the example, or send your own public Reel URL as `reelUrl`. The options go in the JSON body. Use `language: "auto"` for detection, `wordLevelTimestamps: true` for word timings, and `includeSrt` and `includeVtt` to control subtitle output. Set `maxTotalChargeUsd` in the body to cap event spending for the request. Use a native run for a list, profile, dataset, continuation, or a carousel with multiple videos. [Standby example](https://github.com/aimansour/reelsaid/blob/main/examples/api/standby.json) · [OpenAPI reference](https://apify.com/aimansour/reelsaid/server)
+The stable service address is `https://aimansour--reelsaid.apify.actor/`. Download `standby.json` to use the example, or send your own public Reel URL as `reelUrl`. The options go in the JSON body. Use `language: "auto"` for detection, `wordLevelTimestamps: true` for word timings, and `includeSrt` and `includeVtt` to control subtitle output. Set `maxTotalChargeUsd` in the body to cap event spending for the request. Use a native run for a list, profile, dataset, continuation, or a carousel with multiple videos. [Standby example](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/standby.json) · [OpenAPI reference](https://apify.com/aimansour/reelsaid/server)
 
 ```bash
 curl --fail-with-body --silent --show-error \
@@ -25,7 +25,7 @@ Read `rows[0].transcript` for the full spoken text. Subtitle content is inline a
 
 ## Start a native run
 
-Download an example input and pass it as the JSON body. The native interface accepts a single Reel, a list, public accounts, or an Apify dataset. [Single Reel](https://github.com/aimansour/reelsaid/blob/main/examples/api/reel.json) · [Profile](https://github.com/aimansour/reelsaid/blob/main/examples/api/profile.json) · [Dataset](https://github.com/aimansour/reelsaid/blob/main/examples/api/dataset.json)
+Download an example input and pass it as the JSON body. The native interface accepts a single Reel, a list, public accounts, or an Apify dataset. [Single Reel](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/reel.json) · [Profile](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/profile.json) · [Dataset](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/dataset.json)
 
 ```bash
 curl --fail-with-body --silent --show-error \
@@ -55,6 +55,6 @@ Use `maxTotalChargeUsd` in the run URL query to set the native event budget. Rea
 | `status`, `errorCode`, `retryable`, `quality` | Outcome, specific error, retry guidance, and speech or transcript coverage evidence when available. |
 | `charged`, `billedMinutes`, `chargedEvents`, `confirmedChargeUsd` | Event receipt for that result. The amount can be `null` if the precise price is unavailable at response time. |
 
-[Example native dataset row](https://github.com/aimansour/reelsaid/blob/main/examples/api/output.json)
+[Example native dataset row](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/output.json)
 
 If `SUMMARY` includes a continuation, submit its `resumeFromDatasetId` in a new native run. Use `completedDatasetIds` to find results already delivered in earlier runs. Repeated requests can reuse results within the same Apify account and interface. Standby and native runs keep separate histories. Set `forceRefresh` when you want a fresh transcription and its own quality and billing decision.

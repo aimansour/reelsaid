@@ -4,13 +4,10 @@ set -euo pipefail
 scratch=$1
 revision=$2
 selection=${3:-head}
-[[ -n $SOURCE_KEY ]]
-[[ $SOURCE_REPOSITORY =~ ^git@github\.com:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$ ]]
+[[ $SOURCE_REPOSITORY =~ ^https://github\.com/[A-Za-z0-9-]+/reelsaid-core\.git$ ]]
 [[ -z $revision || $revision =~ ^[0-9a-f]{40}$ ]]
 umask 077
-printf '%s\n' "$SOURCE_KEY" > "$scratch/key"
-printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$scratch/known_hosts"
-export GIT_SSH_COMMAND="ssh -i '$scratch/key' -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile='$scratch/known_hosts' -o HostKeyAlgorithms=ssh-ed25519"
+export GIT_TERMINAL_PROMPT=0
 git -C "$scratch" init -q
 if [[ $selection == approved ]]; then
     [[ -n $revision ]]
@@ -23,4 +20,3 @@ else
     [[ -z $revision || $fetched == "$revision" ]]
 fi
 git -C "$scratch" checkout --quiet --detach "$fetched"
-rm -f -- "$scratch/key"

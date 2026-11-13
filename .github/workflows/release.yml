@@ -27,8 +27,8 @@ concurrency:
 jobs:
   release:
     if: >-
-      github.actor == github.repository_owner &&
-      github.triggering_actor == github.repository_owner &&
+      github.actor == 'aimansour' &&
+      github.triggering_actor == 'aimansour' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -42,8 +42,7 @@ jobs:
           SOURCE_REVISION: ${{ inputs.source_revision }}
           PACKAGE_REVISION: ${{ inputs.package_revision }}
           OPERATION: ${{ inputs.operation }}
-          SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
-          SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
+          SOURCE_REPOSITORY: https://github.com/${{ github.repository_owner }}/reelsaid-core.git
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           RELEASE_PRICING_SHA256: ${{ secrets.RELEASE_PRICING_SHA256 }}
         shell: bash
@@ -55,9 +54,9 @@ jobs:
             printf '%s\n' 'Approved revisions required.'
             exit 1
           fi
-          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" approved >/dev/null 2>&1; then
+          if ! bash .github/scripts/checkout-source.sh "$scratch" "$SOURCE_REVISION" approved >/dev/null 2>&1; then
             printf '%s\n' 'Approved source revision unavailable.'
             exit 1
           fi
-          unset SOURCE_KEY SOURCE_REPOSITORY
+          unset SOURCE_REPOSITORY
           bash .github/scripts/verify.sh "$scratch" release "$OPERATION" "$SOURCE_REVISION" "$PACKAGE_REVISION"

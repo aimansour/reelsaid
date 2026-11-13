@@ -30,8 +30,8 @@ jobs:
   verify:
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-      github.actor == github.repository_owner &&
-      github.triggering_actor == github.repository_owner
+      github.actor == 'aimansour' &&
+      github.triggering_actor == 'aimansour'
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
@@ -45,8 +45,7 @@ jobs:
           CHECK_MODE: ${{ inputs.check }}
           COMPARISON_GROUP: ${{ inputs.comparison }}
           PERIODIC_SOURCE_REVISION: ${{ secrets.PERIODIC_SOURCE_REVISION }}
-          SOURCE_REPOSITORY: ${{ secrets.PRIVATE_SOURCE }}
-          SOURCE_KEY: ${{ secrets.PRIVATE_SOURCE_KEY }}
+          SOURCE_REPOSITORY: https://github.com/${{ github.repository_owner }}/reelsaid-core.git
           APIFY_TOKEN: ${{ inputs.check != 'runner-health' && secrets.APIFY_TOKEN || '' }}
           APIFY_STANDBY_TEST_TOKEN: ${{ inputs.comparison == 'standby-cross' && secrets.APIFY_STANDBY_TEST_TOKEN || '' }}
           REELSAID_GROQ_KEYS: ${{ inputs.check == 'runner-health' && secrets.RUNNER_GROQ_KEYS || '' }}
@@ -67,9 +66,9 @@ jobs:
             printf '%s\n' 'Approved source revision required.'
             exit 1
           fi
-          if ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" "$selection" >/dev/null 2>&1; then
+          if ! bash .github/scripts/checkout-source.sh "$scratch" "$SOURCE_REVISION" "$selection" >/dev/null 2>&1; then
             printf '%s\n' 'Approved source revision unavailable.'
             exit 1
           fi
-          unset SOURCE_KEY SOURCE_REPOSITORY PERIODIC_SOURCE_REVISION
+          unset SOURCE_REPOSITORY PERIODIC_SOURCE_REVISION
           bash .github/scripts/verify.sh "$scratch" "$CHECK_MODE" "$COMPARISON_GROUP"

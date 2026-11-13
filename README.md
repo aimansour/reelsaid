@@ -1,4 +1,4 @@
-<a href="https://apify.com/aimansour/reelsaid"><img src="https://raw.githubusercontent.com/aimansour/reelsaid/main/assets/reelsaid-logo.png" alt="ReelSaid logo" width="96" height="96"></a>
+<a href="https://apify.com/aimansour/reelsaid"><img src="https://raw.githubusercontent.com/wip-bunker-42/reelsaid/main/assets/reelsaid-logo.png" alt="ReelSaid logo" width="96" height="96"></a>
 
 # ReelSaid — Instagram Reels Transcript API
 
@@ -23,7 +23,7 @@ Turn public Instagram Reels into **searchable text, opening hooks, and ready-to-
 | **Original-language speech** | Let ReelSaid detect the language or choose it yourself. Speech recognition uses **Whisper Large-v3**, the largest model size in the Whisper family. |
 | **Post details alongside the text** | See the original caption, account, publication date, cover, audio details, and available engagement counts in their own fields. |
 
-On the sample Reel, the hook starts with “One of my favorite quotes from Zig Ziglar is”. The timed segment starts at 0.10 seconds. In the full result you can see the entire quote, the timing for each word, and the separate post metadata. [See a real result in JSON](https://github.com/aimansour/reelsaid/blob/main/examples/api/output.json)
+On the sample Reel, the hook starts with “One of my favorite quotes from Zig Ziglar is”. The timed segment starts at 0.10 seconds. In the full result you can see the entire quote, the timing for each word, and the separate post metadata. [See a real result in JSON](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/output.json)
 
 ## What you can do with Reel transcripts
 
@@ -44,7 +44,7 @@ Try a saved Apify example with real inputs. [Make Reel subtitles](https://apify.
 
 Clear the sample Reel when you want to run only your profile or dataset. You can also mix sources in a native run. ReelSaid recognizes repeated references to the same video and keeps their source information together. Filter by date, minimum views or likes, and video length. You can skip pinned Reels, sort by newest or most viewed, and cap the number of videos. [Full input options](https://apify.com/aimansour/reelsaid/input-schema)
 
-To follow an account, save the profile input as an **Apify Task**, add a `watchlistId`, turn on **Only unanswered Reels**, and create a schedule. The first run can deliver matching existing Reels. Later runs use your account's answer history. [Profile input example](https://github.com/aimansour/reelsaid/blob/main/examples/api/profile.json) · [Apify schedules](https://docs.apify.com/actors/running/schedules)
+To follow an account, save the profile input as an **Apify Task**, add a `watchlistId`, turn on **Only unanswered Reels**, and create a schedule. The first run can deliver matching existing Reels. Later runs use your account's answer history. [Profile input example](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/profile.json) · [Apify schedules](https://docs.apify.com/actors/running/schedules)
 
 ## How billing works
 
@@ -62,9 +62,9 @@ With **Apify MCP**, search for *Instagram Reels transcript API* or select `aiman
 
 | Integration | Starting point |
 | --- | --- |
-| **n8n** | Import the workflow, select an Apify Header Auth credential, and map the result to the next step. [n8n workflow](https://github.com/aimansour/reelsaid/blob/main/examples/n8n/README.md) |
-| **Make** | Import the blueprint, connect your Apify credential, and choose where to send the transcript. [Make blueprint](https://github.com/aimansour/reelsaid/blob/main/examples/make/README.md) |
-| **Zapier** | Send the transcript to the next step in a Zap. [Zapier setup guide](https://github.com/aimansour/reelsaid/blob/main/examples/zapier/README.md) |
+| **n8n** | Import the workflow, select an Apify Header Auth credential, and map the result to the next step. [n8n workflow](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/n8n/README.md) |
+| **Make** | Import the blueprint, connect your Apify credential, and choose where to send the transcript. [Make blueprint](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/make/README.md) |
+| **Zapier** | Send the transcript to the next step in a Zap. [Zapier setup guide](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/zapier/README.md) |
 
 ## Instagram Reels Transcript API
 
@@ -80,11 +80,11 @@ curl --fail-with-body --silent --show-error \
   --data @standby.json
 ```
 
-Use the stable address for repeat requests and `GET /` for readiness. Apify also assigns a Container Web Server address to an individual run. That address belongs to that run and expires when it ends. [Standby JSON input](https://github.com/aimansour/reelsaid/blob/main/examples/api/standby.json) · [Server reference](https://apify.com/aimansour/reelsaid/server)
+Use the stable address for repeat requests and `GET /` for readiness. Apify also assigns a Container Web Server address to an individual run. That address belongs to that run and expires when it ends. [Standby JSON input](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/standby.json) · [Server reference](https://apify.com/aimansour/reelsaid/server)
 
 ### Batches, profiles, and continuation
 
-Start a native run with `POST /v2/acts/aimansour~reelsaid/runs`. Use the returned dataset ID to read results as they arrive. Set `maxTotalChargeUsd` on the run to cap event spending. If a limit pauses the run, read its `SUMMARY` record and send the returned `resumeFromDatasetId` in a new run. Completed items stay in their original datasets. [API recipes and response fields](https://github.com/aimansour/reelsaid/blob/main/examples/api/README.md)
+Start a native run with `POST /v2/acts/aimansour~reelsaid/runs`. Use the returned dataset ID to read results as they arrive. Set `maxTotalChargeUsd` on the run to cap event spending. If a limit pauses the run, read its `SUMMARY` record and send the returned `resumeFromDatasetId` in a new run. Completed items stay in their original datasets. [API recipes and response fields](https://github.com/wip-bunker-42/reelsaid/blob/main/examples/api/README.md)
 
 ## Questions about Reel transcripts
 
@@ -99,3 +99,7 @@ Download a native run's dataset as JSON, CSV, or Excel from Apify. For subtitles
 ### What happens if one Reel fails?
 
 You keep the successful results from the batch. Each video gets a status and, when relevant, an error code and retry guidance. If an old media URL has expired, include the original post URL or shortcode so ReelSaid can look up the current media. For help, share the run ID and the affected Reel in the Issues tab. [ReelSaid issues](https://apify.com/aimansour/reelsaid/issues)
+
+## Open source
+
+The Actor and its test suite are available under the MIT License. [Actor source code](https://github.com/wip-bunker-42/reelsaid-core) · [Documentation and examples license](https://github.com/wip-bunker-42/reelsaid/blob/main/LICENSE)

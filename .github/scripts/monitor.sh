@@ -16,10 +16,10 @@ case "${MONITOR_CASE:-normal}" in
     *) failure 'Verification setup failed' ;;
 esac
 if [[ ! "${SOURCE_REVISION:-}" =~ ^[0-9a-f]{40}$ ]] ||
-    ! bash .github/scripts/private-source.sh "$scratch" "$SOURCE_REVISION" approved >/dev/null 2>&1; then
+    ! bash .github/scripts/checkout-source.sh "$scratch" "$SOURCE_REVISION" approved >/dev/null 2>&1; then
     failure 'Source checkout failed'
 fi
-unset SOURCE_KEY SOURCE_REPOSITORY SOURCE_REVISION
+unset SOURCE_REPOSITORY SOURCE_REVISION
 for attempt in 1 2; do
     if timeout --kill-after=10s 225s bash .github/scripts/verify.sh "$scratch" runner-health >/dev/null 2>&1; then
         printf '%s\n' 'Private verification passed.'
